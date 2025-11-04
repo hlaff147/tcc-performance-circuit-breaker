@@ -12,10 +12,8 @@ services:
   # --- 1. APLICAÇÃO ---
 
   servico-adquirente:
-    # O build deste serviço deve ser fornecido em outro prompt (Prompt 03)
-    # Ex: context: ./servico-adquirente
     build:
-      context: ./servico-adquirente
+      context: ./services/acquirer-service
       dockerfile: Dockerfile
     container_name: servico-adquirente
     ports:
@@ -29,10 +27,9 @@ services:
       - tcc-network
 
   servico-pagamento:
-    # O build deve ser apontado para a V1 ou V2 (Prompts 04 e 05)
-    # Ex: context: ./servico-pagamento-v1
+    # O build deve ser apontado para a V1 ou V2
     build:
-      context: ./servico-pagamento-v1
+      context: ./services/payment-service-v1
       dockerfile: Dockerfile
     container_name: servico-pagamento
     ports:
@@ -51,8 +48,8 @@ services:
     container_name: k6-tester
     command: sleep infinity
     volumes:
-      - ./k6-scripts:/scripts # Mapeia os scripts k6
-      - ./k6-results:/scripts/results # Mapeia a pasta de resultados
+      - ./k6/scripts:/scripts # Mapeia os scripts k6
+      - ./k6/results:/scripts/results # Mapeia a pasta de resultados
     depends_on:
       - servico-pagamento
     networks:
@@ -77,7 +74,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus-data:/prometheus
     command: --config.file=/etc/prometheus/prometheus.yml
     depends_on:
@@ -93,7 +90,7 @@ services:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
     depends_on:
       - prometheus
     networks:

@@ -1,80 +1,198 @@
-# TCC Performance Circuit Breaker
+# Circuit Breaker: Análise Experimental de Resiliência em Microsserviços
 
-Um laboratório completo para comparar a resiliência e o desempenho de duas versões de um serviço de pagamento Java: uma versão _baseline_ (sem proteção) e outra com **Resilience4j Circuit Breaker**. O ambiente usa Docker Compose para orquestrar os serviços de pagamento, adquirente, Prometheus, Grafana e k6.
+Este repositório contém o código-fonte e a documentação completa do experimento desenvolvido para meu Trabalho de Conclusão de Curso, que analisa o impacto do padrão Circuit Breaker na resiliência de microsserviços.
 
-## 🧭 Visão geral do repositório
+## 📖 Visão Geral
 
-| Diretório / arquivo | Descrição |
-| --- | --- |
-| `servico-pagamento-v1/` | Implementação base sem circuit breaker. |
-| `servico-pagamento-v2/` | Implementação com Resilience4j Circuit Breaker. |
-| `servico-adquirente/` | Simula o provedor externo que responde com diferentes latências/falhas. |
-| `k6-scripts/` | Cenários de carga (_normal_, _latência_ e _falha_). |
-| `k6-results/` | Pasta montada pelo k6 para armazenar os relatórios `.json`. |
-| `grafana-provisioning/`, `prometheus/` | Dashboards e configuração das métricas. |
-| `INSTRUCOES.md` | Guia detalhado do experimento e métricas a observar. |
+O projeto consiste em um experimento controlado que compara duas versões de um microsserviço de pagamentos:
 
-## 🏗️ Arquitetura em alto nível
+### Serviço de Pagamento V1 (Baseline)
+- Implementação básica com timeout
+- Sem mecanismos de resiliência avançados
+- Características:
+  - Timeout fixo de 5 segundos
+  - Retry simples (3 tentativas)
+  - Falha rápida em caso de erro
+  - Sem proteção contra sobrecarga
+
+### Serviço de Pagamento V2 (Circuit Breaker)
+- Implementação resiliente usando Resilience4j
+- Características:
+  - Circuit Breaker configurado com:
+    - Sliding Window de 10 chamadas
+    - Threshold de falha de 50%
+    - Tempo de espera de 30 segundos
+  - Retry adaptativo
+  - Bulkhead para limitar chamadas concorrentes
+  - Fallback para respostas degradadas
+
+### Arquitetura do Experimento
+
+![Arquitetura Geral](docs/images/arquitetura_geral.png)
+
+## 📊 Resultados da Análise
+
+### Taxa de Sucesso
+![Taxa de Sucesso](docs/images/success_rate_comparison.png)
+
+### Tempos de Resposta
+![Tempos de Resposta](docs/images/response_times_comparison.png)
+
+O ambiente experimental é composto por:
+
+- **Microsserviços**:
+  - `payment-service`: Serviço principal (sistema sob teste)
+  - `acquirer-service`: Simulador de gateway de pagamento
+
+- **Stack de Monitoramento**:
+  - Prometheus: Coleta de métricas
+  - Grafana: Visualização
+  - cAdvisor: Métricas de container
+
+- **Testes de Carga**:
+  - k6: Execução de cenários de teste
+
+## 🏗️ Estrutura do Projeto
 
 ```
-+-------------------+      +--------------------+
-| k6 (load testing) | ---> | Serviço de Pagamento|
-|                   |      |  V1 ou V2 (Spring) |
-+-------------------+      +----------+---------+
-                                       |
-                                       v
-                            +--------------------+
-                            | Serviço Adquirente |
-                            +--------------------+
-
-Prometheus <---- exporters & métricas ----> Grafana dashboards
+tcc-performance-circuit-breaker/
+├── docs/                      # Documentação
+│   ├── images/               # Imagens dos diagramas e screenshots
+│   ├── diagramas/            # Arquivos fonte dos diagramas PlantUML
+│   └── chapters/             # Capítulos do TCC em Markdown
+├── k6/                       # Testes de carga
+│   ├── scripts/             # Scripts de teste k6
+│   └── results/             # Resultados dos testes
+├── monitoring/              # Configurações de monitoramento
+│   ├── grafana/            # Dashboards e configurações do Grafana
+│   └── prometheus/         # Configurações do Prometheus
+├── services/               # Microsserviços
+│   ├── payment-service/    # Serviço de Pagamento (V1 e V2)
+│   └── acquirer-service/   # Serviço Adquirente
+└── analysis/              # Scripts e resultados de análise
+    ├── scripts/           # Scripts Python de análise
+    ├── data/             # Dados processados (CSV)
+    └── reports/          # Relatórios gerados
 ```
 
-## 🚀 Passo a passo rápido
+## 🧪 Cenários de Teste
 
-1. **Pré-requisitos:** Docker e Docker Compose instalados.
-2. **Preparar diretórios:** garanta que `k6-results/` existe na raiz do projeto.
-3. **Escolher a versão:** edite `docker-compose.yml` e ajuste `servico-pagamento.build.context` para `./servico-pagamento-v1` (baseline) ou `./servico-pagamento-v2` (circuit breaker).
-4. **Subir os serviços:**
+O experimento inclui diversos cenários para avaliar o comportamento do sistema:
+
+1. **Cenário Normal**: Operação padrão sem falhas
+2. **Cenário de Latência**: Alta latência no serviço adquirente
+3. **Cenário de Falha**: Falhas completas no serviço adquirente
+4. **Cenário de Estresse**: Aumento progressivo de carga
+5. **Cenário de Recuperação**: Análise de auto-recuperação
+6. **Cenário de Falhas Intermitentes**: Padrões variados de falha
+7. **Cenário de Alta Concorrência**: Teste de carga extrema
+
+## 🚀 Como Executar
+
+### Pré-requisitos
+
+- Docker e Docker Compose
+- Java 17+
+- Python 3.9+ (para análise dos resultados)
+
+### Configuração e Execução
+
+1. **Clone o repositório:**
    ```bash
-   docker-compose up -d --build
+   git clone https://github.com/seu-usuario/tcc-performance-circuit-breaker.git
+   cd tcc-performance-circuit-breaker
    ```
-5. **Verificar monitoramento:** Grafana em `http://localhost:3000` (login `admin/admin`) e Prometheus em `http://localhost:9090`.
-6. **Rodar os cenários k6** (detalhes abaixo) para gerar `V1_*.json` ou `V2_*.json` em `k6-results/`.
-7. **Acompanhar métricas ao vivo:** CPU/memória dos contêineres, threads da JVM e, para a V2, o estado do circuit breaker (`resilience4j_circuitbreaker_state`).
-8. **Encerrar a rodada:**
+
+2. **Inicie os serviços:**
    ```bash
-   docker-compose down -v
+   docker-compose up -d
    ```
-9. **Trocar de versão** (V1 ↔ V2) e repetir os cenários para comparar resultados.
 
-## 🧪 Executando os cenários k6
+3. **Execute os testes (exemplo para V1):**
+   ```bash
+   docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network \
+     -v $PWD/k6:/k6 \
+     grafana/k6:latest run /k6/scripts/cenario-A-normal.js \
+     --out json=/k6/results/V1_Normal.json
+   ```
 
-> Os comandos a seguir assumem que você está na raiz do repositório em um terminal Unix-like. Se estiver no Windows use `${PWD}` (PowerShell) ou `%cd%` (CMD) no lugar de `$PWD`.
+4. **Analise os resultados:**
+   ```bash
+   python analysis/scripts/analyze_results.py
+   ```
 
-| Cenário | Comando (V1) | Comando (V2) |
-| --- | --- | --- |
-| Tráfego normal | `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-A-normal.js --out json=/scripts/results/V1_Normal.json` | `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-A-normal.js --out json=/scripts/results/V2_Normal.json` |
-| Latência simulada | `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-B-latencia.js --out json=/scripts/results/V1_Latencia.json` | `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-B-latencia.js --out json=/scripts/results/V2_Latencia.json` |
-| Falha do adquirente | `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-C-falha.js --out json=/scripts/results/V1_Falha.json` | `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-C-falha.js --out json=/scripts/results/V2_Falha.json` |
+## 📊 Monitoramento
 
-### Dicas rápidas
-- Aguarde o término de cada cenário antes de iniciar o próximo para evitar sobreposição de métricas.
-- Os relatórios JSON ficam em `k6-results/` e podem ser importados em ferramentas como o [k6 Report Viewer](https://github.com/k6io/k6-reporter).
-- Se o nome da rede do Docker Compose for diferente, ajuste o parâmetro `--network`. Você pode checar o nome com `docker network ls`.
+- **Grafana**: http://localhost:3000 (admin/admin)
+  - Dashboard principal: Circuit Breaker Analysis
+  - Métricas de performance
+  - Estados do Circuit Breaker
 
-## 📊 Métricas recomendadas
+- **Prometheus**: http://localhost:9090
+  - Métricas brutas
+  - Consultas PromQL
+  - Alertas e regras
 
-| Métrica | Onde observar | Por quê |
-| --- | --- | --- |
-| `container_cpu_usage_seconds_total`, `container_memory_usage_bytes` | Grafana → painel de Docker/Containers | Compara consumo de recursos entre V1 e V2. |
-| `tomcat_threads_busy`, `jvm_threads_live`, `jvm_memory_used_bytes` | Grafana → painel JVM | Evidenciam saturação da aplicação sem circuit breaker. |
-| `resilience4j_circuitbreaker_state`, `resilience4j_circuitbreaker_calls_total` | Grafana → painel Circuit Breaker | Mostra abertura/fechamento do circuito e chamadas bloqueadas. |
+## 📝 Documentação
 
-## 🧹 Troubleshooting
+- `docs/chapters/`: Documentação detalhada do experimento
+- `docs/images/`: Diagramas e screenshots
+- `analysis/reports/`: Relatórios de análise
 
-- **k6 não encontra scripts**: confirme que está na raiz do projeto ao executar o comando e que a pasta `k6-scripts/` existe.
-- **Erro de rede no k6**: valide o nome da rede Docker (`docker network ls`) e troque `tcc-performance-circuit-breaker_tcc-network` se necessário.
-- **Grafana vazio**: aguarde alguns segundos após subir os serviços; os dashboards são provisionados automaticamente.
+## 🔄 Fluxos de Execução
 
-Para detalhes completos do experimento (descrição longa, métricas e interpretações), consulte o arquivo [`INSTRUCOES.md`](INSTRUCOES.md).
+### Cenário de Falha (V1)
+![Fluxo de Falha V1](docs/images/sequencia_falha_v1.png)
+
+No fluxo V1, quando ocorre uma falha:
+1. Cliente faz requisição de pagamento
+2. Serviço tenta processar com timeout
+3. Adquirente falha ou demora
+4. Serviço retenta 3 vezes
+5. Cliente recebe erro 500
+6. Recursos ficam presos até timeout
+7. Sistema pode ficar sobrecarregado
+
+### Cenário com Circuit Breaker (V2)
+![Fluxo com Circuit Breaker V2](docs/images/sequencia_resiliencia_v2.png)
+
+No fluxo V2, com Circuit Breaker:
+1. Cliente faz requisição de pagamento
+2. Circuit Breaker monitora chamadas
+3. Se adquirente falha frequentemente:
+   - Circuito abre
+   - Falhas rápidas sem consumir recursos
+   - Resposta degradada quando possível
+4. Após período de espera:
+   - Circuito meio-aberto
+   - Testa recuperação do serviço
+5. Sistema se recupera automaticamente
+
+## � Stack de Monitoramento
+
+![Stack de Monitoramento](docs/images/stack_monitoramento.png)
+
+A stack de monitoramento inclui:
+- Prometheus para coleta de métricas
+- Grafana para dashboards
+- cAdvisor para métricas de container
+- Métricas customizadas do Circuit Breaker
+
+### Métricas Principais
+- Taxa de sucesso/falha
+- Tempos de resposta
+- Estado do Circuit Breaker
+- Uso de recursos
+- Throughput
+
+## ⚙️ Componentes do Sistema
+
+![Componentes Internos](docs/images/componentes_internos.png)
+
+## 📝 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+## ✨ Contribuições
+
+Contribuições são bem-vindas! Por favor, leia o [CONTRIBUTING.md](CONTRIBUTING.md) para detalhes sobre nosso código de conduta e o processo de submissão de pull requests.
