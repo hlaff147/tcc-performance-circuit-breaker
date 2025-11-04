@@ -27,10 +27,6 @@ logs/
 .env
 *.env
 
-# K6 Results
-k6-results/*
-!k6-results/.gitkeep
-
 # Prometheus & Grafana
 prometheus/data/
 grafana/data/
