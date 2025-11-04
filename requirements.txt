@@ -1,0 +1,4 @@
+pandas
+matplotlib
+prometheus-api-client
+# k6-summary (opcional, para parsing avançado do JSON do k6)
