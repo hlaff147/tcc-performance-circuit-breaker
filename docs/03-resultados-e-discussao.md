@@ -51,3 +51,57 @@ Os testes de carga foram executados usando `k6` e `Docker Compose`. Cada versão
 ## Discussão Geral
 
 O experimento comprovou que a implementação V1 é inaceitável para produção. A V2 (Circuit Breaker) não apenas evitou a falha, mas o fez com custo zero em cenários normais e garantiu a continuidade do negócio em cenários de falha, demonstrando um comportamento resiliente e previsível mesmo sob estresse severo.
+
+## Automação da Observabilidade e Análises Complementares
+
+Para que os resultados apresentados se tornem parte de uma rotina de monitoramento contínuo, recomenda-se automatizar a extração de métricas do Prometheus e dos painéis do Grafana, bem como integrar esses dados a uma etapa de análise exploratória em Python. A seguir, descrevem-se os passos sugeridos:
+
+1. **Exportação de métricas do Prometheus para arquivos `.txt`:**
+   - Utilize a API HTTP nativa do Prometheus para capturar séries temporais agregadas. Exemplo:
+     ```bash
+     curl "http://localhost:9090/api/v1/query?query=histogram_quantile(0.95%2C%20sum(rate(http_request_duration_seconds_bucket%5B1m%5D))%20by%20(le))" \
+       | jq '{cenario:"normal", p95:(.data.result[0].value[1]|tonumber)}' >> logs/prometheus-metricas.ndjson
+     ```
+   - Agende o comando em um `cronjob` (ou pipeline CI) para gerar snapshots periódicos. Armazene os arquivos em `logs/` com carimbo de data/hora para facilitar auditorias.
+
+2. **Exportação automática de painéis do Grafana:**
+   - Gere *snapshots* programáticos usando o endpoint de renderização de painéis:
+     ```bash
+     curl -H "Authorization: Bearer $GRAFANA_API_TOKEN" \
+       "http://localhost:3000/render/d-solo/<dashboard_uid>/<panel_id>?from=now-15m&to=now&width=1000&height=500" \
+       --output logs/grafana-panel-latencia.png
+     ```
+   - Para obter dados brutos, use a API `/api/ds/query` com o mesmo *payload* do painel, salvando a resposta JSON em `logs/grafana-query.json`. Assim, o reuso dos dados em outras ferramentas fica garantido.
+
+3. **Pipeline de análise com Python:**
+   - Converta os resultados do `k6` em JSON (`k6 run --summary-export k6-results/normal.json script.js`) e combine-os com as métricas exportadas do Prometheus usando `pandas`:
+     ```python
+     import json
+     from datetime import datetime
+
+     import pandas as pd
+     import matplotlib.pyplot as plt
+
+     with open("k6-results/normal.json") as f:
+         k6_data = json.load(f)
+     df_k6 = pd.DataFrame([
+         {
+             "cenario": "normal",
+             "versao": "v1",
+             "p95": k6_data["metrics"]["http_req_duration"]["percentiles"]["p(95)"],
+             "error_rate": k6_data["metrics"]["http_req_failed"]["rate"],
+         }
+     ])
+
+     df_prom = pd.read_json("logs/prometheus-metricas.ndjson", lines=True)
+     df_merged = df_k6.merge(df_prom, on="cenario", how="left")
+
+     df_merged.plot.bar(x="versao", y=["p95", "error_rate"])
+     plt.title(f"Comparativo de Latência e Erros ({datetime.now():%Y-%m-%d})")
+     plt.savefig("docs/imagens/comparativo_p95_erros.png", dpi=150)
+     ```
+   - Inclua o script em um *notebook* ou pipeline automatizado (GitHub Actions, Jenkins, etc.) para gerar gráficos atualizados a cada execução dos testes. Ao salvar as imagens no diretório `docs/imagens/`, os gráficos podem ser incorporados diretamente ao TCC.
+
+4. **Versionamento dos artefatos:** centralize os arquivos exportados (`.txt`, `.json`, `.png`) em um diretório versionado (`k6-results/exports/`). Com isso, cada execução de teste fica documentada, apoiando auditorias de SLA e comparativos históricos.
+
+Essa rotina garante rastreabilidade dos experimentos, permite enriquecer a análise quantitativa com visualizações consistentes e oferece uma base sólida para alimentar futuras pesquisas sobre padrões de resiliência.
