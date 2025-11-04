@@ -27,8 +27,13 @@ export default function () {
     'status is 200 or 202': (res) => res.status === 200 || res.status === 202,
   });
 
-  ttfbTrend.add(response.timings.ttfb);
-  waitingTrend.add(response.timings.waiting);
+  // Só adiciona métricas de tempo se existirem valores válidos
+  if (response.timings.ttfb !== undefined) {
+    ttfbTrend.add(response.timings.ttfb);
+  }
+  if (response.timings.waiting !== undefined) {
+    waitingTrend.add(response.timings.waiting);
+  }
 
   sleep(1);
 }
