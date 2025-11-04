@@ -28,8 +28,16 @@ export default function () {
     'status is 200 or 202': (res) => res.status === 200 || res.status === 202,
   });
 
-  ttfbTrend.add(response.timings.ttfb);
-  waitingTrend.add(response.timings.waiting);
+  const { timings = {} } = response;
+  const { ttfb, waiting } = timings;
+
+  if (Number.isFinite(ttfb)) {
+    ttfbTrend.add(ttfb);
+  }
+
+  if (Number.isFinite(waiting)) {
+    waitingTrend.add(waiting);
+  }
 
   sleep(1);
 }
