@@ -67,7 +67,8 @@ tcc-performance-circuit-breaker/
 │   ├── grafana/            # Dashboards e configurações do Grafana
 │   └── prometheus/         # Configurações do Prometheus
 ├── services/               # Microsserviços
-│   ├── payment-service/    # Serviço de Pagamento (V1 e V2)
+│   ├── payment-service-v1/ # Serviço de Pagamento sem Circuit Breaker
+│   ├── payment-service-v2/ # Serviço de Pagamento com Circuit Breaker
 │   └── acquirer-service/   # Serviço Adquirente
 └── analysis/              # Scripts e resultados de análise
     ├── scripts/           # Scripts Python de análise
@@ -111,7 +112,8 @@ O experimento inclui diversos cenários para avaliar o comportamento do sistema:
 3. **Execute os testes (exemplo para V1):**
    ```bash
    docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network \
-     -v $PWD/k6:/k6 \
+     -v $PWD/k6/scripts:/k6/scripts \
+     -v $PWD/k6/results:/k6/results \
      grafana/k6:latest run /k6/scripts/cenario-A-normal.js \
      --out json=/k6/results/V1_Normal.json
    ```
@@ -168,7 +170,7 @@ No fluxo V2, com Circuit Breaker:
    - Testa recuperação do serviço
 5. Sistema se recupera automaticamente
 
-## � Stack de Monitoramento
+## 🧰 Stack de Monitoramento
 
 ![Stack de Monitoramento](docs/images/stack_monitoramento.png)
 
@@ -195,4 +197,4 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 ## ✨ Contribuições
 
-Contribuições são bem-vindas! Por favor, leia o [CONTRIBUTING.md](CONTRIBUTING.md) para detalhes sobre nosso código de conduta e o processo de submissão de pull requests.
+Contribuições são bem-vindas! Abra uma issue descrevendo sua proposta de melhoria ou correção e, em seguida, envie um pull request seguindo as boas práticas de Git e revisão por pares.

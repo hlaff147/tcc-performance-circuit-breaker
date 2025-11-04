@@ -48,8 +48,8 @@ services:
     container_name: k6-tester
     command: sleep infinity
     volumes:
-      - ./k6/scripts:/scripts # Mapeia os scripts k6
-      - ./k6/results:/scripts/results # Mapeia a pasta de resultados
+      - ./k6/scripts:/k6/scripts # Mapeia os scripts k6
+      - ./k6/results:/k6/results # Mapeia a pasta de resultados
     depends_on:
       - servico-pagamento
     networks:
