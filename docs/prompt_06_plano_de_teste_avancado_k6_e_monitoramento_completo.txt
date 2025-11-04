@@ -294,9 +294,9 @@ O experimento consiste em 6 execuções de teste (3 cenários x 2 versões). Cri
       * Abra o **Prometheus**: `http://localhost:9090` (verifique a aba *Targets*).
       * No Grafana, vá em "Explore" e use o *data source* "Prometheus". Comece a observar métricas como `container_cpu_usage_seconds_total` e `container_memory_usage_bytes` para o `servico-pagamento`.
 4.  **Executar Testes (Coletando JSON):**
-      * **Cenário A:** `docker exec k6-tester k6 run /scripts/cenario-A-normal.js --out json=/scripts/results/V1_Normal.json`
-      * **Cenário B:** `docker exec k6-tester k6 run /scripts/cenario-B-latencia.js --out json=/scripts/results/V1_Latencia.json`
-      * **Cenário C:** `docker exec k6-tester k6 run /scripts/cenario-C-falha.js --out json=/scripts/results/V1_Falha.json`
+      * **Cenário A:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-A-normal.js --out json=/scripts/results/V1_Normal.json`
+      * **Cenário B:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-B-latencia.js --out json=/scripts/results/V1_Latencia.json`
+      * **Cenário C:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-C-falha.js --out json=/scripts/results/V1_Falha.json`
 5.  **Observar:** *Durante* a execução dos cenários B e C, observe os gráficos no Grafana. Você verá o uso de CPU (`container_cpu_usage_seconds_total`) e memória (`container_memory_usage_bytes`) do `servico-pagamento` disparar. Observe também `tomcat_threads_busy` (deve atingir o máximo) e `jvm_memory_used_bytes` (para picos de GC).
 6.  **Limpar:** Rode `docker-compose down -v`. (O `-v` remove os volumes de dados, limpando o estado).
 
@@ -307,9 +307,9 @@ O experimento consiste em 6 execuções de teste (3 cenários x 2 versões). Cri
 2.  **Subir Ambiente:** `docker-compose up -d --build`.
 3.  **Acessar Monitoramento:** Abra o Grafana (`http://localhost:3000`).
 4.  **Executar Testes (Coletando JSON):**
-      * **Cenário A:** `docker exec k6-tester k6 run /scripts/cenario-A-normal.js --out json=/scripts/results/V2_Normal.json`
-      * **Cenário B:** `docker exec k6-tester k6 run /scripts/cenario-B-latencia.js --out json=/scripts/results/V2_Latencia.json`
-      * **Cenário C:** `docker exec k6-tester k6 run /scripts/cenario-C-falha.js --out json=/scripts/results/V2_Falha.json`
+      * **Cenário A:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-A-normal.js --out json=/scripts/results/V2_Normal.json`
+      * **Cenário B:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-B-latencia.js --out json=/scripts/results/V2_Latencia.json`
+      * **Cenário C:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-C-falha.js --out json=/scripts/results/V2_Falha.json`
 5.  **Observar:** *Durante* os cenários B e C, observe o Grafana.
       * **Métricas Chave do CB:** `resilience4j_circuitbreaker_state` (você verá mudar de 1 (CLOSED) para 0 (OPEN)) e `resilience4j_circuitbreaker_calls_total` (para ver chamadas `successful`, `failed` e `not_permitted`).
       * **Métricas de Desempenho:** Observe como `tomcat_threads_busy` permanece BAIXO e ESTÁVEL, e como `container_cpu_usage_seconds_total` não dispara, provando que o CB está protegendo o serviço.
