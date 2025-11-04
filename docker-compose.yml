@@ -12,6 +12,8 @@ services:
   # --- 1. APLICAÇÃO ---
 
   servico-adquirente:
+    # O build deste serviço deve ser fornecido em outro prompt (Prompt 03)
+    # Ex: context: ./servico-adquirente
     build:
       context: ./servico-adquirente
       dockerfile: Dockerfile
@@ -22,6 +24,8 @@ services:
       - tcc-network
 
   servico-pagamento:
+    # O build deve ser apontado para a V1 ou V2 (Prompts 04 e 05)
+    # Ex: context: ./servico-pagamento-v1
     build:
       context: ./servico-pagamento-v1
       dockerfile: Dockerfile
@@ -32,6 +36,8 @@ services:
       - servico-adquirente
     networks:
       - tcc-network
+    # IMPORTANTE: Este serviço deve ter as dependências do Actuator e Prometheus:
+    # 'spring-boot-starter-actuator' e 'micrometer-registry-prometheus'
 
   # --- 2. ECOSSISTEMA DE TESTE E MONITORAMENTO ---
 
@@ -40,7 +46,8 @@ services:
     container_name: k6-tester
     command: sleep infinity
     volumes:
-      - ./k6-scripts:/scripts
+      - ./k6-scripts:/scripts # Mapeia os scripts k6
+      - ./k6-results:/scripts/results # Mapeia a pasta de resultados
     depends_on:
       - servico-pagamento
     networks:
@@ -50,7 +57,7 @@ services:
     image: gcr.io/cadvisor/cadvisor:v0.47.2
     container_name: cadvisor
     ports:
-      - "8088:8080"
+      - "8088:8080" # Porta para UI do cAdvisor
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
