@@ -1,0 +1,88 @@
+version: "3.8"
+
+networks:
+  tcc-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+services:
+  # --- 1. APLICAÇÃO ---
+
+  servico-adquirente:
+    build:
+      context: ./servico-adquirente
+      dockerfile: Dockerfile
+    container_name: servico-adquirente
+    ports:
+      - "8081:8081"
+    networks:
+      - tcc-network
+
+  servico-pagamento:
+    build:
+      context: ./servico-pagamento-v1
+      dockerfile: Dockerfile
+    container_name: servico-pagamento
+    ports:
+      - "8080:8080"
+    depends_on:
+      - servico-adquirente
+    networks:
+      - tcc-network
+
+  # --- 2. ECOSSISTEMA DE TESTE E MONITORAMENTO ---
+
+  k6-tester:
+    image: grafana/k6:latest
+    container_name: k6-tester
+    command: sleep infinity
+    volumes:
+      - ./k6-scripts:/scripts
+    depends_on:
+      - servico-pagamento
+    networks:
+      - tcc-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: cadvisor
+    ports:
+      - "8088:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - tcc-network
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml
+    depends_on:
+      - cadvisor
+      - servico-pagamento
+    networks:
+      - tcc-network
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - tcc-network

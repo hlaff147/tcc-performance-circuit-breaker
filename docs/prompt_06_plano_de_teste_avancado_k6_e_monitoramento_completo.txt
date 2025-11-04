@@ -1,0 +1,318 @@
+Gere todos os artefatos de teste e monitoramento para executar o experimento.
+
+Isso inclui:
+1.  Um `docker-compose.yml` completo com Prometheus, Grafana e cAdvisor.
+2.  Arquivos de configuração para o Prometheus e Grafana.
+3.  Os 3 scripts de teste do `k6` (com métricas de tendência adicionais).
+4.  Instruções de execução detalhadas, incluindo como salvar os resultados do `k6` em JSON e o que observar no Grafana.
+
+---
+
+**1. Gere o arquivo `docker-compose.yml`:**
+
+Este arquivo deve definir 6 serviços: os 2 da aplicação, o `k6` para testes e o stack de monitoramento (`prometheus`, `cadvisor`, `grafana`).
+
+```yaml
+version: "3.8"
+
+networks:
+  tcc-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+services:
+  # --- 1. APLICAÇÃO ---
+
+  servico-adquirente:
+    build:
+      context: ./servico-adquirente # (Diretório do Prompt 03)
+      dockerfile: Dockerfile
+    container_name: servico-adquirente
+    ports:
+      - "8081:8081"
+    networks:
+      - tcc-network
+
+  servico-pagamento:
+    build:
+      context: ./servico-pagamento-v1 # (Instrução: Aponte para V1 ou V2)
+      dockerfile: Dockerfile
+    container_name: servico-pagamento
+    ports:
+      - "8080:8080"
+    depends_on:
+      - servico-adquirente
+    networks:
+      - tcc-network
+    # IMPORTANTE: O serviço (Prompt 05) deve ter as dependências do Actuator e Prometheus:
+    # 'spring-boot-starter-actuator' e 'micrometer-registry-prometheus'
+
+  # --- 2. ECOSSISTEMA DE TESTE E MONITORAMENTO ---
+
+  k6-tester:
+    image: grafana/k6:latest
+    container_name: k6-tester
+    command: sleep infinity
+    volumes:
+      - ./k6-scripts:/scripts # Mapeia os scripts k6
+    depends_on:
+      - servico-pagamento
+    networks:
+      - tcc-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: cadvisor
+    ports:
+      - "8088:8080" # Porta para UI do cAdvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - tcc-network
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml
+    depends_on:
+      - cadvisor
+      - servico-pagamento
+    networks:
+      - tcc-network
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-provisioning/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - tcc-network
+```
+
+-----
+
+**2. Gere os arquivos de configuração (Prometheus e Grafana):**
+
+Crie os arquivos `prometheus/prometheus.yml` e `grafana-provisioning/datasources/datasource.yml`.
+
+**Arquivo: `prometheus/prometheus.yml`**
+
+```yaml
+global:
+  scrape_interval: 15s # Coleta métricas a cada 15 segundos
+
+scrape_configs:
+  # Alvo 1: O próprio Prometheus (para saúde do monitoramento)
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Alvo 2: cAdvisor (Métricas de Contêiner: CPU, Memória, Rede)
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # Alvo 3: O 'servico-pagamento' (Métricas da JVM, Tomcat e Resilience4j)
+  - job_name: "servico-pagamento"
+    metrics_path: "/actuator/prometheus" # Caminho do Spring Boot Actuator
+    static_configs:
+      - targets: ["servico-pagamento:8080"]
+```
+
+**Arquivo: `grafana-provisioning/datasources/datasource.yml`**
+
+```yaml
+# Este arquivo auto-configura o Grafana para se conectar ao Prometheus
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090 # URL interna do Prometheus no Docker
+    isDefault: true
+    editable: false
+```
+
+-----
+
+**3. Gere os scripts `k6` atualizados (com `Trends` e salvamento de JSON):**
+
+Os scripts agora incluem `Trend` para métricas customizadas, o que permite uma análise de tempo mais detalhada (ex: TTFB).
+
+**Arquivo: `k6-scripts/cenario-A-normal.js`**
+
+```javascript
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+import { Trend } from 'k6/metrics';
+
+// Métricas de Tendência customizadas para mais detalhes nos gráficos
+const ttfbTrend = new Trend('ttfb');
+const waitingTrend = new Trend('waiting_time');
+
+export const options = {
+  vus: 50,
+  duration: '1m',
+  thresholds: {
+    http_req_failed: ['rate<0.01'], // Menos de 1% de falhas
+    http_req_duration: ['p(95)<200'], // 95% das reqs abaixo de 200ms
+    ttfb: ['p(95)<150'], // TTFB p(95) abaixo de 150ms
+  },
+};
+
+const BASE_URL = 'http://servico-pagamento:8080/pagar?modo=normal';
+const payload = JSON.stringify({ valor: 100.0, cartao: "1234..." });
+const params = { headers: { 'Content-Type': 'application/json' } };
+
+export default function () {
+  const response = http.post(BASE_URL, payload, params);
+
+  check(response, {
+    'status is 200': (res) => res.status === 200,
+  });
+
+  // Coleta métricas de tempo detalhadas
+  ttfbTrend.add(response.timings.ttfb);
+  waitingTrend.add(response.timings.waiting);
+
+  sleep(1);
+}
+```
+
+**Arquivo: `k6-scripts/cenario-B-latencia.js`**
+
+```javascript
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+import { Trend } from 'k6/metrics';
+
+const ttfbTrend = new Trend('ttfb');
+const waitingTrend = new Trend('waiting_time');
+
+export const options = {
+  vus: 50,
+  duration: '1m', // 1 minuto de teste
+  thresholds: {
+    // V1 (Baseline) irá FALHAR nestes thresholds
+    // V2 (Circuit Breaker) irá PASSAR
+    http_req_failed: ['rate<0.01'],
+    http_req_duration: ['p(95)<300'], // p(95) abaixo de 300ms (V1 estoura, V2 passa)
+  },
+};
+
+const BASE_URL = 'http://servico-pagamento:8080/pagar?modo=latencia';
+const payload = JSON.stringify({ valor: 100.0, cartao: "1234..." });
+const params = { headers: { 'Content-Type': 'application/json' } };
+
+export default function () {
+  const response = http.post(BASE_URL, payload, params);
+
+  // Válido para V1 (que falha) e V2 (que retorna 202 - Accepted)
+  check(response, {
+    'status is 200 or 202': (res) => res.status === 200 || res.status === 202,
+  });
+
+  ttfbTrend.add(response.timings.ttfb);
+  waitingTrend.add(response.timings.waiting);
+
+  sleep(1);
+}
+```
+
+**Arquivo: `k6-scripts/cenario-C-falha.js`**
+
+```javascript
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+import { Trend } from 'k6/metrics';
+
+const ttfbTrend = new Trend('ttfb');
+const waitingTrend = new Trend('waiting_time');
+
+export const options = {
+  vus: 50,
+  duration: '1m',
+  thresholds: {
+    // V1 (Baseline) irá FALHAR (100% de erro)
+    // V2 (Circuit Breaker) irá PASSAR (0% de erro)
+    http_req_failed: ['rate<0.01'],
+  },
+};
+
+const BASE_URL = 'http://servico-pagamento:8080/pagar?modo=falha';
+const payload = JSON.stringify({ valor: 100.0, cartao: "1234..." });
+const params = { headers: { 'Content-Type': 'application/json' } };
+
+export default function () {
+  const response = http.post(BASE_URL, payload, params);
+
+  // Válido para V1 (que falha) e V2 (que retorna 202 - Accepted)
+  check(response, {
+    'status is 200 or 202': (res) => res.status === 200 || res.status === 202,
+  });
+
+  ttfbTrend.add(response.timings.ttfb);
+  waitingTrend.add(response.timings.waiting);
+
+  sleep(1);
+}
+```
+
+-----
+
+**4. Gere as Instruções de Execução (com coleta de dados):**
+
+Explique o procedimento experimental em 2 rodadas, agora incluindo a coleta de dados de monitoramento e do `k6`.
+
+**Procedimento Experimental de Coleta de Dados**
+
+O experimento consiste em 6 execuções de teste (3 cenários x 2 versões). Crie um diretório `k6-results` na raiz do projeto.
+
+**Rodada 1: Testando V1 (Baseline)**
+
+1.  **Preparar:** Edite o `docker-compose.yml` (linha 22) para que o `build` do `servico-pagamento` aponte para o diretório da **V1 (Baseline)**.
+      * `context: ./servico-pagamento-v1`
+2.  **Subir Ambiente:** No terminal, rode `docker-compose up -d --build`. Aguarde ~1 minuto para os serviços iniciarem.
+3.  **Acessar Monitoramento:**
+      * Abra o **Grafana**: `http://localhost:3000` (login: admin/admin).
+      * Abra o **Prometheus**: `http://localhost:9090` (verifique a aba *Targets*).
+      * No Grafana, vá em "Explore" e use o *data source* "Prometheus". Comece a observar métricas como `container_cpu_usage_seconds_total` e `container_memory_usage_bytes` para o `servico-pagamento`.
+4.  **Executar Testes (Coletando JSON):**
+      * **Cenário A:** `docker exec k6-tester k6 run /scripts/cenario-A-normal.js --out json=/scripts/results/V1_Normal.json`
+      * **Cenário B:** `docker exec k6-tester k6 run /scripts/cenario-B-latencia.js --out json=/scripts/results/V1_Latencia.json`
+      * **Cenário C:** `docker exec k6-tester k6 run /scripts/cenario-C-falha.js --out json=/scripts/results/V1_Falha.json`
+5.  **Observar:** *Durante* a execução dos cenários B e C, observe os gráficos no Grafana. Você verá o uso de CPU (`container_cpu_usage_seconds_total`) e memória (`container_memory_usage_bytes`) do `servico-pagamento` disparar. Observe também `tomcat_threads_busy` (deve atingir o máximo) e `jvm_memory_used_bytes` (para picos de GC).
+6.  **Limpar:** Rode `docker-compose down -v`. (O `-v` remove os volumes de dados, limpando o estado).
+
+**Rodada 2: Testando V2 (Circuit Breaker)**
+
+1.  **Preparar:** Edite o `docker-compose.yml` (linha 22) para que o `build` do `servico-pagamento` aponte para o diretório da **V2 (Circuit Breaker)**.
+      * `context: ./servico-pagamento-v2`
+2.  **Subir Ambiente:** `docker-compose up -d --build`.
+3.  **Acessar Monitoramento:** Abra o Grafana (`http://localhost:3000`).
+4.  **Executar Testes (Coletando JSON):**
+      * **Cenário A:** `docker exec k6-tester k6 run /scripts/cenario-A-normal.js --out json=/scripts/results/V2_Normal.json`
+      * **Cenário B:** `docker exec k6-tester k6 run /scripts/cenario-B-latencia.js --out json=/scripts/results/V2_Latencia.json`
+      * **Cenário C:** `docker exec k6-tester k6 run /scripts/cenario-C-falha.js --out json=/scripts/results/V2_Falha.json`
+5.  **Observar:** *Durante* os cenários B e C, observe o Grafana.
+      * **Métricas Chave do CB:** `resilience4j_circuitbreaker_state` (você verá mudar de 1 (CLOSED) para 0 (OPEN)) e `resilience4j_circuitbreaker_calls_total` (para ver chamadas `successful`, `failed` e `not_permitted`).
+      * **Métricas de Desempenho:** Observe como `tomcat_threads_busy` permanece BAIXO e ESTÁVEL, e como `container_cpu_usage_seconds_total` não dispara, provando que o CB está protegendo o serviço.
+6.  **Limpar:** Rode `docker-compose down -v`.
+
+**Final:** Você terá 6 arquivos `.json` detalhados em `k6-results` para a análise estatística do `k6`, e terá observado (e pode "printar") os gráficos do Grafana que mostram o comportamento interno (CPU, Memória, Threads, Estado do CB) durante os testes, fornecendo material rico para o TCC.
