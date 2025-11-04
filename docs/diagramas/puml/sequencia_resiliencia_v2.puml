@@ -1,7 +1,6 @@
 @startuml sequencia_resiliencia_v2
 
 skinparam backgroundColor white
-skinparam handwritten false
 skinparam defaultFontName Arial
 skinparam defaultFontSize 12
 

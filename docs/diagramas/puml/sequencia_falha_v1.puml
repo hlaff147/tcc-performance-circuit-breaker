@@ -1,7 +1,6 @@
 @startuml sequencia_falha_v1
 
 skinparam backgroundColor white
-skinparam handwritten false
 skinparam defaultFontName Arial
 skinparam defaultFontSize 12
 

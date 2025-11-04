@@ -1,7 +1,6 @@
 @startuml arquitetura_geral
 
 skinparam backgroundColor white
-skinparam handwritten false
 skinparam defaultFontName Arial
 skinparam defaultFontSize 12
 

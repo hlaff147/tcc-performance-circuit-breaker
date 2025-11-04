@@ -1,7 +1,6 @@
 @startuml componentes_internos
 
 skinparam backgroundColor white
-skinparam handwritten false
 skinparam defaultFontName Arial
 skinparam defaultFontSize 12
 
