@@ -28,8 +28,16 @@ export default function () {
   });
 
   // Coleta métricas de tempo detalhadas
-  ttfbTrend.add(response.timings.ttfb);
-  waitingTrend.add(response.timings.waiting);
+  const { timings = {} } = response;
+  const { ttfb, waiting } = timings;
+
+  if (Number.isFinite(ttfb)) {
+    ttfbTrend.add(ttfb);
+  }
+
+  if (Number.isFinite(waiting)) {
+    waitingTrend.add(waiting);
+  }
 
   sleep(1);
 }
