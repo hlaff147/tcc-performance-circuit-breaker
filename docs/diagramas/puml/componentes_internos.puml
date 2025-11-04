@@ -1,0 +1,85 @@
+@startuml componentes_internos
+
+skinparam backgroundColor white
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam package {
+    backgroundColor<<Application>> #d4f3ef
+    borderColor<<Application>> #2d938e
+    backgroundColor #f8f9fa
+    borderColor #dee2e6
+    fontColor #212529
+}
+
+skinparam component {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam cloud {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam database {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam arrow {
+    color #6c757d
+    fontColor #495057
+}
+
+skinparam actor {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam note {
+    backgroundColor #fff3cd
+    borderColor #ffeeba
+    fontColor #856404
+}
+
+
+allowmixing
+
+package "Controllers" {
+    class PagamentoController {
+        +pagar(PagamentoRequest)
+    }
+}
+
+package "Services" {
+    class PagamentoService {
+        +processarPagamento(...)
+    }
+}
+
+package "Clients (Feign)" {
+    interface AdquirenteClient {
+        +autorizar(AutorizacaoRequest)
+    }
+}
+
+package "Resilience (CB)" {
+    artifact "Resilience4j (CircuitBreaker)" as CB
+    class PagamentoFallback {
+        +handleFalhaAdquirente(Throwable t)
+    }
+}
+
+PagamentoController --> PagamentoService
+PagamentoService --> CB
+CB --> AdquirenteClient : (no estado FECHADO)
+CB ..> PagamentoFallback : (no estado ABERTO ou em erro)
+AdquirenteClient -[hidden]- PagamentoFallback
+
+@enduml

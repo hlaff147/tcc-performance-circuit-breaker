@@ -1,0 +1,85 @@
+@startuml sequencia_resiliencia_v2
+
+skinparam backgroundColor white
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam package {
+    backgroundColor<<Application>> #d4f3ef
+    borderColor<<Application>> #2d938e
+    backgroundColor #f8f9fa
+    borderColor #dee2e6
+    fontColor #212529
+}
+
+skinparam component {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam cloud {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam database {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam arrow {
+    color #6c757d
+    fontColor #495057
+}
+
+skinparam actor {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam note {
+    backgroundColor #fff3cd
+    borderColor #ffeeba
+    fontColor #856404
+}
+
+
+actor k6
+participant "servico-pagamento (V2)\n[CB: FECHADO]" as Pagamento
+participant "FallbackHandler" as Fallback
+participant "servico-adquirente" as Adquirente
+
+group Primeiras Chamadas (Circuito FECHADO)
+    k6 -> Pagamento: POST /pagar
+    activate Pagamento
+    Pagamento -> Adquirente: POST /autorizar
+    Adquirente --> Pagamento: HTTP 503 (Falha)
+    Pagamento --> k6: HTTP 500 (Erro inicial)
+    deactivate Pagamento
+    note right of Pagamento: Contador de falha incrementado.
+end
+
+... Algum tempo depois ...
+
+note over Pagamento: Taxa de falha atingida!\n**Circuito ABERTO**
+
+group Próximas Chamadas (Circuito ABERTO)
+    k6 -> Pagamento: POST /pagar
+    activate Pagamento
+    note right of Pagamento: Fail-Fast! Chamada bloqueada pelo CB.
+    Pagamento ->> Fallback: executarFallback(exception)
+    activate Fallback
+    Fallback -->> Pagamento: (Dados de contingência)
+    deactivate Fallback
+    Pagamento --> k6: HTTP 202 Accepted
+    deactivate Pagamento
+end
+
+note over Fallback, Adquirente: "Sistema protegido: 'servico-adquirente' não é acionado, 'k6' recebe sucesso."
+
+@enduml

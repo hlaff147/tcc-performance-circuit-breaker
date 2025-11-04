@@ -1,0 +1,71 @@
+@startuml sequencia_falha_v1
+
+skinparam backgroundColor white
+skinparam handwritten false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam package {
+    backgroundColor<<Application>> #d4f3ef
+    borderColor<<Application>> #2d938e
+    backgroundColor #f8f9fa
+    borderColor #dee2e6
+    fontColor #212529
+}
+
+skinparam component {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam cloud {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam database {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam arrow {
+    color #6c757d
+    fontColor #495057
+}
+
+skinparam actor {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam note {
+    backgroundColor #fff3cd
+    borderColor #ffeeba
+    fontColor #856404
+}
+
+
+actor k6
+participant "servico-pagamento (V1)" as Pagamento
+participant "servico-adquirente" as Adquirente
+
+k6 -> Pagamento: POST /pagar
+activate Pagamento
+
+Pagamento -> Adquirente: POST /autorizar
+activate Adquirente
+Adquirente --> Pagamento: HTTP 503 (Service Unavailable)
+deactivate Adquirente
+
+note right of Pagamento: Thread bloqueada!\nConsome recursos esperando timeout.
+
+Pagamento --> k6: HTTP 500 (Internal Server Error)
+deactivate Pagamento
+
+note over k6, Adquirente: "Falha em cascata: k6 recebe erro, Pagamento sofreu sobrecarga."
+
+@enduml
