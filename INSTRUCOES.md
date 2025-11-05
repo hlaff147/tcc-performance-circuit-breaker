@@ -1,0 +1,51 @@
+# Procedimento Experimental de Coleta de Dados
+
+O experimento consiste em 6 execuções de teste (3 cenários x 2 versões). Crie um diretório `k6-results` na raiz do projeto (ele será mapeado pelo `docker-compose.yml`).
+
+## Passo a passo rápido
+
+1. **Preparar diretórios:** garanta que `k6-results/` existe na raiz do projeto.
+2. **Escolher a versão do serviço:** edite `docker-compose.yml` e defina `build.context` de `servico-pagamento` para `./servico-pagamento-v1` ou `./servico-pagamento-v2`.
+3. **Subir o ambiente:** `docker-compose up -d --build`.
+4. **Conferir monitoramento:** Grafana em `http://localhost:3000` (admin/admin) e Prometheus em `http://localhost:9090`.
+5. **Rodar cenários k6:** execute os três comandos `docker run ... cenario-*.js` indicados abaixo para a versão atual (salvando em `V1_*.json` ou `V2_*.json`).
+6. **Acompanhar métricas:** use o Grafana para observar CPU, memória, threads e, na V2, o estado do circuit breaker.
+7. **Encerrar a rodada:** `docker-compose down -v`.
+8. **Trocar de versão:** ajuste novamente o `build.context` para a outra pasta (`servico-pagamento-v1` ↔ `servico-pagamento-v2`).
+9. **Repetir os testes k6** para gerar o segundo conjunto de relatórios JSON.
+10. **Consolidar resultados:** reúna os seis arquivos em `k6-results/` e exporte gráficos do Grafana, se necessário.
+
+## Rodada 1: Testando V1 (Baseline)
+
+1.  **Preparar:** Edite o `docker-compose.yml` (linha 22) para que o `build` do `servico-pagamento` aponte para o diretório da **V1 (Baseline)**.
+    * `context: ./servico-pagamento-v1`
+2.  **Subir Ambiente:** No terminal, rode `docker-compose up -d --build`. Aguarde ~1 minuto para os serviços iniciarem.
+3.  **Acessar Monitoramento:**
+    * Abra o **Grafana**: `http://localhost:3000` (login: admin/admin).
+    * Abra o **Prometheus**: `http://localhost:9090` (verifique a aba *Targets*).
+    * No Grafana, vá em "Explore" e use o *data source* "Prometheus".
+4.  **Executar Testes (Coletando JSON):** – rode cada cenário em sequência utilizando a imagem oficial do k6. Os comandos abaixo assumem que você está na raiz do projeto em um ambiente Unix-like (para Windows PowerShell troque `$PWD` por `${PWD}` e, no CMD, por `%cd%`).
+    * **Cenário A:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-A-normal.js --out json=/scripts/results/V1_Normal.json`
+    * **Cenário B:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-B-latencia.js --out json=/scripts/results/V1_Latencia.json`
+    * **Cenário C:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-C-falha.js --out json=/scripts/results/V1_Falha.json`
+5.  **Observar:** *Durante* a execução dos cenários B e C, observe os gráficos no Grafana.
+    * **Métricas de Desempenho:** `container_cpu_usage_seconds_total` (para `servico-pagamento`), `container_memory_usage_bytes` (para `servico-pagamento`).
+    * **Métricas da JVM/Tomcat:** `tomcat_threads_busy` (deve atingir o máximo), `jvm_threads_live` (deve disparar), `jvm_memory_used_bytes` (para picos de GC).
+6.  **Limpar:** Rode `docker-compose down -v`. (O `-v` remove os volumes de dados, limpando o estado).
+
+## Rodada 2: Testando V2 (Circuit Breaker)
+
+1.  **Preparar:** Edite o `docker-compose.yml` (linha 22) para que o `build` do `servico-pagamento` aponte para o diretório da **V2 (Circuit Breaker)**.
+    * `context: ./servico-pagamento-v2`
+2.  **Subir Ambiente:** `docker-compose up -d --build`.
+3.  **Acessar Monitoramento:** Abra o Grafana (`http://localhost:3000`).
+4.  **Executar Testes (Coletando JSON):**
+    * **Cenário A:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-A-normal.js --out json=/scripts/results/V2_Normal.json`
+    * **Cenário B:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-B-latencia.js --out json=/scripts/results/V2_Latencia.json`
+    * **Cenário C:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-C-falha.js --out json=/scripts/results/V2_Falha.json`
+5.  **Observar:** *Durante* os cenários B e C, observe o Grafana.
+    * **Métricas Chave do CB:** `resilience4j_circuitbreaker_state` (você verá mudar de 1 (CLOSED) para 0 (OPEN)), `resilience4j_circuitbreaker_calls_total` (observe o aumento de chamadas `failed` e `not_permitted`).
+    * **Métricas de Desempenho:** Observe como `tomcat_threads_busy` e `jvm_threads_live` permanecem **baixos e estáveis**. Verifique `container_cpu_usage_seconds_total`, que não deve disparar, provando que o CB está protegendo o serviço.
+6.  **Limpar:** Rode `docker-compose down -v`.
+
+**Final:** Você terá 6 arquivos `.json` detalhados em `k6-results` para a análise estatística do `k6`, e terá observado (e pode "printar") os gráficos do Grafana que mostram o comportamento interno (CPU, Memória, Threads, Estado do CB) durante os testes, fornecendo material rico para o TCC.

@@ -1,0 +1,9 @@
+# Este arquivo auto-configura o Grafana para se conectar ao Prometheus
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090 # URL interna do Prometheus no Docker
+    isDefault: true
+    editable: false

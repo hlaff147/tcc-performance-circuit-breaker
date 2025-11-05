@@ -1,0 +1,97 @@
+version: "3.8"
+
+networks:
+  tcc-network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+services:
+  # --- 1. APLICAÇÃO ---
+
+  servico-adquirente:
+    build:
+      context: ./services/acquirer-service
+      dockerfile: Dockerfile
+    container_name: servico-adquirente
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8081'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - tcc-network
+
+  servico-pagamento:
+    # O build deve ser apontado para a V1 ou V2
+    build:
+      context: ./services/payment-service-v1
+      dockerfile: Dockerfile
+    container_name: servico-pagamento
+    ports:
+      - "8080:8080"
+    depends_on:
+      - servico-adquirente
+    networks:
+      - tcc-network
+    # IMPORTANTE: Este serviço deve ter as dependências do Actuator e Prometheus:
+    # 'spring-boot-starter-actuator' e 'micrometer-registry-prometheus'
+
+  # --- 2. ECOSSISTEMA DE TESTE E MONITORAMENTO ---
+
+  k6-tester:
+    image: grafana/k6:latest
+    container_name: k6-tester
+    command: sleep infinity
+    volumes:
+      - ./k6/scripts:/scripts # Mapeia os scripts k6
+      - ./k6/results:/scripts/results # Mapeia a pasta de resultados
+    depends_on:
+      - servico-pagamento
+    networks:
+      - tcc-network
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: cadvisor
+    ports:
+      - "8088:8080" # Porta para UI do cAdvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - tcc-network
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command: --config.file=/etc/prometheus/prometheus.yml
+    depends_on:
+      - cadvisor
+      - servico-pagamento
+    networks:
+      - tcc-network
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - tcc-network

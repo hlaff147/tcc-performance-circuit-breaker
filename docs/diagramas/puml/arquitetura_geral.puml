@@ -1,0 +1,76 @@
+@startuml arquitetura_geral
+
+skinparam backgroundColor white
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam package {
+    backgroundColor<<Application>> #d4f3ef
+    borderColor<<Application>> #2d938e
+    backgroundColor #f8f9fa
+    borderColor #dee2e6
+    fontColor #212529
+}
+
+skinparam component {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam cloud {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam database {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam arrow {
+    color #6c757d
+    fontColor #495057
+}
+
+skinparam actor {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam note {
+    backgroundColor #fff3cd
+    borderColor #ffeeba
+    fontColor #856404
+}
+
+
+allowmixing
+
+actor "k6 (Load Tester)" as k6
+actor "Aluno (Pesquisador)" as pesquisador
+
+node "Docker Host" {
+    component "servico-pagamento" as pagamento
+    component "servico-adquirente" as adquirente
+    
+    package "Stack de Monitoramento" {
+        component "Prometheus" as prometheus
+        component "Grafana" as grafana
+        component "cAdvisor" as cadvisor
+    }
+}
+
+k6 --> pagamento : [HTTP POST /pagar]
+pagamento --> adquirente : [HTTP POST /autorizar (Feign)]
+cadvisor --> pagamento : [Monitora Container]
+cadvisor --> adquirente : [Monitora Container]
+prometheus --> pagamento : [Scrape: /actuator/prometheus]
+prometheus --> cadvisor : [Scrape: Métricas de CPU/Memória]
+grafana --> prometheus : [Query: PromQL]
+pesquisador --> grafana : [Visualiza Dashboards]
+
+@enduml

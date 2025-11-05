@@ -1,0 +1,73 @@
+@startuml stack_monitoramento
+
+skinparam backgroundColor white
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+
+skinparam package {
+    backgroundColor<<Application>> #d4f3ef
+    borderColor<<Application>> #2d938e
+    backgroundColor #f8f9fa
+    borderColor #dee2e6
+    fontColor #212529
+}
+
+skinparam component {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam cloud {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam database {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam arrow {
+    color #6c757d
+    fontColor #495057
+}
+
+skinparam actor {
+    backgroundColor #f8f9fa
+    borderColor #6c757d
+    fontColor #212529
+}
+
+skinparam note {
+    backgroundColor #fff3cd
+    borderColor #ffeeba
+    fontColor #856404
+}
+
+
+allowmixing
+
+cloud "Prometheus" {
+    database "TSDB"
+}
+
+component "cAdvisor" as cadvisor
+component "servico-pagamento" as pagamento
+component "Grafana" as grafana
+artifact "k6 (JSON Output)" as k6_output
+component "k6" as k6
+artifact "Python (Script de Análise)" as python
+
+Prometheus <-- cadvisor : [scrape: container_cpu,\ncontainer_memory]
+Prometheus <-- pagamento : [scrape: /actuator/prometheus]\n(jvm_threads, tomcat_threads,\nresilience4j_state, ...)
+
+k6 -> k6_output : [Gera: p95, req_rate, errors]
+
+grafana -> Prometheus : [Query: PromQL]
+python -> Prometheus : [API Query (Automação)]
+python -> k6_output : [Lê JSON]
+
+@enduml

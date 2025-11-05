@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s # Coleta métricas a cada 15 segundos
+
+scrape_configs:
+  # Alvo 1: O próprio Prometheus (para saúde do monitoramento)
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Alvo 2: cAdvisor (Métricas de Contêiner: CPU, Memória, Rede)
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # Alvo 3: O 'servico-pagamento' (Métricas da JVM, Tomcat e Resilience4j)
+  - job_name: "servico-pagamento"
+    metrics_path: "/actuator/prometheus" # Caminho do Spring Boot Actuator
+    static_configs:
+      - targets: ["servico-pagamento:8080"]
