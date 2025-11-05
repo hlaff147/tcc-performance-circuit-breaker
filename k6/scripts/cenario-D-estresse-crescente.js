@@ -35,8 +35,8 @@ const payload = JSON.stringify({ valor: 100.0, cartao: "1234..." });
 const params = { headers: { 'Content-Type': 'application/json' } };
 
 export default function () {
-  // Registra a concorrência atual
-  concurrentRequests.add(options.scenarios.estresse_crescente.executor.vusActive);
+  // Registra a concorrência atual usando __VU (variável global do k6)
+  concurrentRequests.add(__VU);
 
   const startTime = Date.now();
   const response = http.post(BASE_URL, payload, params);
