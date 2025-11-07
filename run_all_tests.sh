@@ -67,9 +67,15 @@ wait_for_http() {
   local delay="${3:-3}"    # Aumentado de 2 para 3 segundos de delay
 
   for attempt in $(seq 1 "${retries}"); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
-      return 0
+    local status
+    status="$(curl -sS -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo 000)"
+
+    if [ "${status}" != "000" ]; then
+      if [ "${status}" -ge 200 ] && [ "${status}" -lt 500 ]; then
+        return 0
+      fi
     fi
+
     sleep "${delay}"
   done
 

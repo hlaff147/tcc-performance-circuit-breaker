@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import exec from 'k6/execution';
 import { Trend, Rate, Counter } from 'k6/metrics';
 
 // Métricas customizadas
@@ -92,7 +93,9 @@ export default function () {
   if (Number.isFinite(ttfb)) ttfbTrend.add(ttfb);
   if (Number.isFinite(waiting)) waitingTrend.add(waiting);
 
-  // Pausa variável baseada na carga
-  const pauseTime = Math.max(0.1, 1 - (options.scenarios.estresse_crescente.executor.vusActive / 300));
+  // Pausa variável baseada na carga (usa runtime para evitar acessar config estática)
+  const scenarioState = exec.instance.currentScenario;
+  const activeVUs = scenarioState ? scenarioState.vusActive : 0;
+  const pauseTime = Math.max(0.1, 1 - (activeVUs / 300));
   sleep(pauseTime);
 }

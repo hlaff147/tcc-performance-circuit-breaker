@@ -16,7 +16,7 @@ warnings.filterwarnings('ignore')
 
 # Configurações globais
 PROMETHEUS_URL = "http://localhost:9090"
-RESULTS_DIR = "k6-results"
+RESULTS_DIR = "k6/results"
 OUTPUT_DIR = "analysis_results"
 
 # Métricas do Prometheus (PromQL) expandidas
