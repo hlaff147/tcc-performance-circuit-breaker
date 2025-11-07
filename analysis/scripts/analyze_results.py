@@ -1,16 +1,15 @@
 import os
 import json
-import pandas as pd
-import numpy as np
+from collections import Counter
+from typing import Any, Dict, List, Optional
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import seaborn as sns
-from prometheus_api_client import PrometheusConnect
-from typing import Dict, List, Any
-from datetime import datetime
-import plotly.graph_objects as go
-import plotly.express as px
-from scipy import stats
 from jinja2 import Template
+from prometheus_api_client import PrometheusConnect
+from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -56,6 +55,8 @@ class ExperimentAnalyzer:
         os.makedirs(f"{OUTPUT_DIR}/csv", exist_ok=True)
         self.all_metrics = {}
         self.k6_results = {}
+        self.response_times_df: Optional[pd.DataFrame] = None
+        self.stats_df: Optional[pd.DataFrame] = None
         
     def load_k6_results(self):
         """Carrega todos os resultados do k6 em um dicionário estruturado"""
@@ -99,21 +100,68 @@ class ExperimentAnalyzer:
 
     def analyze_response_times(self):
         """Analisa os tempos de resposta dos testes do k6"""
-        results = []
+
+        if self.response_times_df is not None:
+            return self.response_times_df
+
+        results: List[Dict[str, Any]] = []
         for version in self.k6_results:
             for scenario in self.k6_results[version]:
                 data = self.k6_results[version][scenario]
                 metrics = data.get('metrics', {})
-                
+
                 # Extrair métricas relevantes
-                http_req_duration_values = [v.get('value', 0) for v in metrics.get('http_req_duration', {}).get('values', [])]
-                http_reqs_values = len([v for v in metrics.get('http_reqs', {}).get('values', []) if v.get('tags', {}).get('status') == '200'])
-                http_failed_values = len([v for v in metrics.get('http_reqs', {}).get('values', []) if v.get('tags', {}).get('status') != '200'])
-                
-                total_requests = http_reqs_values + http_failed_values
-                success_rate = (http_reqs_values / total_requests * 100) if total_requests > 0 else 0
-                error_rate = (http_failed_values / total_requests * 100) if total_requests > 0 else 0
-                
+                http_req_duration_values = [
+                    v.get('value', 0)
+                    for v in metrics.get('http_req_duration', {}).get('values', [])
+                    if isinstance(v, dict)
+                ]
+
+                http_req_points = [
+                    point for point in metrics.get('http_reqs', {}).get('values', [])
+                    if isinstance(point, dict)
+                ]
+
+                status_counts = Counter()
+                for point in http_req_points:
+                    status = point.get('tags', {}).get('status')
+                    if not status:
+                        # Linhas agregadas sem status específico não devem ser contadas
+                        continue
+                    value = point.get('value', 0)
+                    try:
+                        numeric_value = int(value)
+                    except (TypeError, ValueError):
+                        try:
+                            numeric_value = int(float(value))
+                        except (TypeError, ValueError):
+                            continue
+                    status_counts[status] += numeric_value
+
+                fallback_count = status_counts.get('202', 0)
+                success_count = sum(
+                    count for status, count in status_counts.items()
+                    if status.startswith('2') and status != '202'
+                )
+                http_5xx_count = sum(
+                    count for status, count in status_counts.items()
+                    if status.startswith('5')
+                )
+                other_error_count = sum(
+                    count for status, count in status_counts.items()
+                    if not status.startswith('2') and not status.startswith('5')
+                )
+
+                total_requests = (
+                    success_count + fallback_count + http_5xx_count + other_error_count
+                )
+                failure_count = http_5xx_count + other_error_count
+
+                success_rate = (success_count / total_requests * 100) if total_requests > 0 else 0
+                fallback_rate = (fallback_count / total_requests * 100) if total_requests > 0 else 0
+                error_rate = (failure_count / total_requests * 100) if total_requests > 0 else 0
+                http_5xx_rate = (http_5xx_count / total_requests * 100) if total_requests > 0 else 0
+
                 result = {
                     'version': version,
                     'scenario': scenario,
@@ -121,14 +169,22 @@ class ExperimentAnalyzer:
                     'p95_response_time': np.percentile(http_req_duration_values, 95) if http_req_duration_values else 0,
                     'min_response_time': np.min(http_req_duration_values) if http_req_duration_values else 0,
                     'max_response_time': np.max(http_req_duration_values) if http_req_duration_values else 0,
+                    'total_requests': total_requests,
+                    'success_count': success_count,
+                    'fallback_count': fallback_count,
+                    'http_5xx_count': http_5xx_count,
+                    'other_error_count': other_error_count,
                     'success_rate': success_rate,
-                    'error_rate': error_rate
+                    'fallback_rate': fallback_rate,
+                    'error_rate': error_rate,
+                    'http_5xx_rate': http_5xx_rate
                 }
                 results.append(result)
-        
+
         # Converter para DataFrame e salvar em CSV
         df = pd.DataFrame(results)
         df.to_csv(f"{OUTPUT_DIR}/csv/response_times_analysis.csv", index=False)
+        self.response_times_df = df
         return df
 
     def create_comparative_plots(self):
@@ -163,8 +219,12 @@ class ExperimentAnalyzer:
 
     def perform_statistical_analysis(self):
         """Realiza análise estatística dos resultados"""
+
+        if self.stats_df is not None:
+            return self.stats_df
+
         response_times_df = self.analyze_response_times()
-        stats_results = []
+        stats_results: List[Dict[str, Any]] = []
         
         for scenario in response_times_df['scenario'].unique():
             v1_data = response_times_df[
@@ -195,6 +255,7 @@ class ExperimentAnalyzer:
         
         stats_df = pd.DataFrame(stats_results)
         stats_df.to_csv(f"{OUTPUT_DIR}/csv/statistical_analysis.csv", index=False)
+        self.stats_df = stats_df
         return stats_df
 
     def generate_html_report(self):
