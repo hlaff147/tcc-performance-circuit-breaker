@@ -109,42 +109,48 @@ def analyze_performance(v1_path, v2_path):
     print("Calculando estatísticas...")
     
     # Função auxiliar para calcular métricas do Circuit Breaker
-    def calculate_cb_metrics(df_version, version_name):
-        # Total de requisições
-        total_reqs = len(df_version[df_version['metric_name'] == 'http_req_failed'])
-        
-        # Falhas reais (500/503) - ANTES do CB ativar
-        real_failures = df_version[df_version['metric_name'] == 'real_failures']['value'].sum()
-        
-        # Respostas de fallback (202) - CB ATIVO
-        fallback_responses = df_version[df_version['metric_name'] == 'fallback_responses']['value'].sum()
-        
-        # Sucessos reais (200)
-        successful_responses = df_version[df_version['metric_name'] == 'successful_responses']['value'].sum()
-        
-        # Taxa de erro REAL que ativou o Circuit Breaker
-        error_rate_data = df_version[df_version['metric_name'] == 'circuit_breaker_error_rate']['value']
-        if len(error_rate_data) > 0:
-            # error_rate já vem como boolean (1 para erro, 0 para sucesso)
-            error_rate = (error_rate_data.sum() / len(error_rate_data)) * 100
-        else:
-            error_rate = 0.0
-        
+    def get_counter_total(df_version, metric_name):
+        values = df_version[df_version['metric_name'] == metric_name]['value']
+        if len(values) == 0:
+            return 0
+        return int(values.max())
+
+    def calculate_cb_metrics(df_version):
+        # Total de requisições registradas (cada ponto de http_req_failed representa uma tentativa)
+        http_failed = df_version[df_version['metric_name'] == 'http_req_failed']['value']
+        total_reqs = len(http_failed)
+
+        # Falhas HTTP registradas pelo K6 (status >= 400)
+        http_failures = int(http_failed.sum()) if total_reqs > 0 else 0
+
+        # Contadores personalizados do Circuit Breaker
+        real_failures = get_counter_total(df_version, 'real_failures')
+        fallback_responses = get_counter_total(df_version, 'fallback_responses')
+        successful_responses = get_counter_total(df_version, 'successful_responses')
+
+        # Taxas derivadas
+        error_rate = (real_failures / total_reqs * 100) if total_reqs > 0 else 0.0
+        fallback_rate = (fallback_responses / total_reqs * 100) if total_reqs > 0 else 0.0
+        success_rate = (successful_responses / total_reqs * 100) if total_reqs > 0 else 0.0
+
         # Mudanças de estado do CB
-        cb_state_changes = len(df_version[df_version['metric_name'] == 'circuit_state_changes'])
-        
+        cb_state_changes = get_counter_total(df_version, 'circuit_state_changes')
+
         return {
             'total_requests': total_reqs,
-            'real_failures': int(real_failures),
-            'fallback_responses': int(fallback_responses),
-            'successful_responses': int(successful_responses),
+            'http_failures': http_failures,
+            'real_failures': real_failures,
+            'fallback_responses': fallback_responses,
+            'successful_responses': successful_responses,
             'error_rate': round(error_rate, 2),
+            'fallback_rate': round(fallback_rate, 2),
+            'success_rate': round(success_rate, 2),
             'cb_state_changes': cb_state_changes
         }
     
     # Calcular métricas para V1 e V2
-    cb_metrics_v1 = calculate_cb_metrics(df_v1, 'V1 (Baseline)')
-    cb_metrics_v2 = calculate_cb_metrics(df_v2, 'V2 (Circuit Breaker)')
+    cb_metrics_v1 = calculate_cb_metrics(df_v1)
+    cb_metrics_v2 = calculate_cb_metrics(df_v2)
     
     # Gerar estatísticas
     stats = pd.DataFrame({
@@ -156,10 +162,13 @@ def analyze_performance(v1_path, v2_path):
             'Máximo de VUs',
             'Total de Requisições',
             '--- Circuit Breaker ---',
+            'Falhas HTTP (>=400)',
             'Falhas Reais (500/503)',
             'Respostas Fallback (202)',
             'Sucessos Reais (200)',
             'Taxa de Erro Real (%)',
+            'Taxa de Fallback (%)',
+            'Taxa de Sucesso Real (%)',
             'Mudanças de Estado CB',
         ]
     })
@@ -177,10 +186,13 @@ def analyze_performance(v1_path, v2_path):
             int(vu_data.max()) if len(vu_data) > 0 else 0,
             cb_metrics['total_requests'],
             '---',
+            cb_metrics['http_failures'],
             cb_metrics['real_failures'],
             cb_metrics['fallback_responses'],
             cb_metrics['successful_responses'],
             cb_metrics['error_rate'],
+            cb_metrics['fallback_rate'],
+            cb_metrics['success_rate'],
             cb_metrics['cb_state_changes'],
         ]
     
@@ -190,17 +202,25 @@ def analyze_performance(v1_path, v2_path):
     print("\n" + "="*80)
     print("EXPLICAÇÃO DAS MÉTRICAS DO CIRCUIT BREAKER")
     print("="*80)
+    print("\n📊 V1 (Sem Circuit Breaker):")
+    print(f"  • Total de Requisições: {cb_metrics_v1['total_requests']:,}")
+    print(f"  • Falhas HTTP (>=400): {cb_metrics_v1['http_failures']:,}")
+    print(f"  • Falhas Reais: {cb_metrics_v1['real_failures']:,}")
+    print(f"  • Fallbacks: {cb_metrics_v1['fallback_responses']:,}")
+    print(f"  • Sucessos Reais: {cb_metrics_v1['successful_responses']:,}")
+    print(f"  • Taxa de Erro Real: {cb_metrics_v1['error_rate']}%")
+    print(f"  • Mudanças de Estado: {cb_metrics_v1['cb_state_changes']}")
+
     print("\n📊 V2 (Com Circuit Breaker):")
-    print(f"  • Falhas Reais: {cb_metrics_v2['real_failures']} requisições retornaram 500/503")
-    print(f"    → Estas falhas ATIVARAM o Circuit Breaker")
-    print(f"\n  • Respostas Fallback: {cb_metrics_v2['fallback_responses']} requisições retornaram 202")
-    print(f"    → Circuit Breaker ATIVO protegendo o sistema")
-    print(f"\n  • Sucessos Reais: {cb_metrics_v2['successful_responses']} requisições retornaram 200")
-    print(f"    → Transações processadas com sucesso")
-    print(f"\n  • Taxa de Erro Real: {cb_metrics_v2['error_rate']}%")
-    print(f"    → Percentual de requisições que FALHARAM e ativaram o CB")
-    print(f"\n  • Mudanças de Estado: {cb_metrics_v2['cb_state_changes']} transições")
-    print(f"    → Circuit Breaker abrindo/fechando conforme necessário")
+    print(f"  • Total de Requisições: {cb_metrics_v2['total_requests']:,}")
+    print(f"  • Falhas HTTP (>=400): {cb_metrics_v2['http_failures']:,}")
+    print(f"  • Falhas Reais: {cb_metrics_v2['real_failures']:,} → Estas falhas ATIVARAM o Circuit Breaker")
+    print(f"  • Respostas Fallback: {cb_metrics_v2['fallback_responses']:,} → Circuit Breaker ATIVO protegendo o sistema")
+    print(f"  • Sucessos Reais: {cb_metrics_v2['successful_responses']:,} → Transações processadas com sucesso")
+    print(f"  • Taxa de Erro Real: {cb_metrics_v2['error_rate']}% → Percentual de requisições que FALHARAM e ativaram o CB")
+    print(f"  • Taxa de Fallback: {cb_metrics_v2['fallback_rate']}% → Percentual atendido via fallback")
+    print(f"  • Taxa de Sucesso Real: {cb_metrics_v2['success_rate']}% → Processamento completo")
+    print(f"  • Mudanças de Estado: {cb_metrics_v2['cb_state_changes']} transições → CB abrindo/fechando conforme necessário")
     print("\n" + "="*80)
     
     return stats

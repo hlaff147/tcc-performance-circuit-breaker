@@ -59,22 +59,22 @@ let successfulRequests = 0;
 export default function () {
   // Atualiza métricas de concorrência
   const currentTime = Date.now();
-  concurrencyGauge.add(1);  // Incrementa quando VU inicia execução
-  
+
   requestQueue++;
   queueDepth.add(requestQueue);
+  concurrencyGauge.add(requestQueue);
   
   const startTime = currentTime;
   const response = http.post(BASE_URL, payload, params);
   const endTime = Date.now();
   
-  requestQueue--;
-  
+  requestQueue = Math.max(requestQueue - 1, 0);
+  concurrencyGauge.add(requestQueue);
+
   // Análise da resposta
   const duration = endTime - startTime;
   resourceUtilization.add(duration);
-  
-  requestQueue--;
+
   
   // ==========================================
   // CLASSIFICAÇÃO CORRETA DAS RESPOSTAS
@@ -129,8 +129,6 @@ export default function () {
   
   // Pequena pausa para não sobrecarregar demais
   sleep(0.1);
-  
-  concurrencyGauge.add(-1);  // Decrementa quando VU termina execução
   
   // ==========================================
   // VERIFICAÇÕES CORRETAS
