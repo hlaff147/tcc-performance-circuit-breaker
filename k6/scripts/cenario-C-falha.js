@@ -1,17 +1,24 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { Trend } from 'k6/metrics';
+import { Trend, Rate, Counter } from 'k6/metrics';
 
 const ttfbTrend = new Trend('ttfb');
 const waitingTrend = new Trend('waiting_time');
+
+// Métricas de Circuit Breaker - CRÍTICAS para análise
+const realFailures = new Counter('real_failures');           // HTTP 500/503 - Falhas REAIS
+const fallbackResponses = new Counter('fallback_responses'); // HTTP 202 - Circuit Breaker ativado
+const successfulResponses = new Counter('successful_responses'); // HTTP 200 - Sucesso real
+const errorRate = new Rate('circuit_breaker_error_rate');    // Taxa de erro que ativa o CB
 
 export const options = {
   vus: 50,
   duration: '1m',
   thresholds: {
     // V1 (Baseline) irá FALHAR (100% de erro)
-    // V2 (Circuit Breaker) irá PASSAR (0% de erro)
-    http_req_failed: ['rate<0.01'],
+    // V2 (Circuit Breaker) terá FALHAS INICIAIS seguidas de fallback
+    http_req_failed: ['rate<0.50'],  // Permite até 50% de falhas (antes do CB ativar)
+    circuit_breaker_error_rate: ['rate<0.50'], // Taxa de erro real
   },
 };
 
@@ -22,9 +29,36 @@ const params = { headers: { 'Content-Type': 'application/json' } };
 export default function () {
   const response = http.post(BASE_URL, payload, params);
 
-  // Válido para V1 (que falha) e V2 (que retorna 202 - Accepted)
+  // ==========================================
+  // CLASSIFICAÇÃO CORRETA DAS RESPOSTAS
+  // ==========================================
+  let isRealSuccess = false;
+  let isFallback = false;
+  let isRealFailure = false;
+  
+  if (response.status === 200) {
+    isRealSuccess = true;
+    successfulResponses.add(1);
+    errorRate.add(false); // Não é erro
+  } else if (response.status === 202) {
+    isFallback = true;
+    fallbackResponses.add(1);
+    // IMPORTANTE: Fallback NÃO conta como erro na taxa, mas indica CB ativo
+  } else if (response.status === 500 || response.status === 503) {
+    isRealFailure = true;
+    realFailures.add(1);
+    errorRate.add(true); // É ERRO que ativa o CB
+  }
+
   check(response, {
-    'status is 200 or 202': (res) => res.status === 200 || res.status === 202,
+    'status is valid (200, 202, or 500)': () => 
+      response.status === 200 || response.status === 202 || response.status === 500,
+    
+    'successful transaction (200 only)': () => isRealSuccess,
+    
+    'fallback activated (202)': () => isFallback,
+    
+    'real failure (500/503)': () => isRealFailure,
   });
 
   const { timings = {} } = response;

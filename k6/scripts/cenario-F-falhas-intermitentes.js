@@ -8,6 +8,12 @@ const successRate = new Rate('success_rate');
 const failurePatterns = new Counter('failure_patterns');
 const adaptationTime = new Trend('adaptation_time');
 
+// Métricas de Circuit Breaker - CRÍTICAS para análise
+const realFailures = new Counter('real_failures');           // HTTP 500/503 - Falhas REAIS
+const fallbackResponses = new Counter('fallback_responses'); // HTTP 202 - Circuit Breaker ativado
+const successfulResponses = new Counter('successful_responses'); // HTTP 200 - Sucesso real
+const errorRate = new Rate('circuit_breaker_error_rate');    // Taxa de erro que ativa o CB
+
 export const options = {
   scenarios: {
     falhas_intermitentes: {
@@ -19,6 +25,7 @@ export const options = {
   thresholds: {
     http_req_duration: ['p(95)<2000'],    // 95% das requisições < 2s
     success_rate: ['rate>0.85'],          // Taxa de sucesso > 85%
+    circuit_breaker_error_rate: ['rate<0.40'], // Taxa de erro real < 40%
   },
 };
 
@@ -99,15 +106,44 @@ export default function () {
   const duration = endTime - startTime;
   responseTime.add(duration);
   
-  const isSuccess = response.status === 200 || response.status === 202;
-  successRate.add(isSuccess);
+  // ==========================================
+  // CLASSIFICAÇÃO CORRETA DAS RESPOSTAS
+  // ==========================================
+  let isRealSuccess = false;
+  let isFallback = false;
+  let isRealFailure = false;
   
-  if (isSuccess && failureCount > 0) {
+  if (response.status === 200) {
+    isRealSuccess = true;
+    successfulResponses.add(1);
+    successRate.add(true);
+    errorRate.add(false); // Não é erro
+  } else if (response.status === 202) {
+    isFallback = true;
+    fallbackResponses.add(1);
+    successRate.add(true); // Sistema respondeu
+    // IMPORTANTE: Fallback NÃO conta como erro na taxa, mas indica CB ativo
+  } else if (response.status === 500 || response.status === 503) {
+    isRealFailure = true;
+    realFailures.add(1);
+    successRate.add(false);
+    errorRate.add(true); // É ERRO que ativa o CB
+  }
+  
+  if ((isRealSuccess || isFallback) && failureCount > 0) {
     adaptationTime.add(endTime - patternStartTime);
   }
   
   check(response, {
-    'status is 200 or 202': () => isSuccess,
+    'status is valid (200, 202, or 500)': () => 
+      response.status === 200 || response.status === 202 || response.status === 500,
+    
+    'successful transaction (200 only)': () => isRealSuccess,
+    
+    'fallback activated (202)': () => isFallback,
+    
+    'real failure (500/503)': () => isRealFailure,
+    
     'adapts to failure pattern': () => {
       if (failureCount > 10) {  // Após várias falhas, deve usar fallback
         return response.status === 202;

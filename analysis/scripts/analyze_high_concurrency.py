@@ -11,7 +11,14 @@ def load_k6_results(file_path):
         'http_req_duration',
         'http_reqs',
         'vus',
-        'iteration_duration'
+        'iteration_duration',
+        'http_req_failed',  # Para calcular taxa de falha
+        'checks',  # Para verificar checks
+        'real_failures',  # Falhas reais (500/503)
+        'fallback_responses',  # Respostas de fallback (202)
+        'successful_responses',  # Sucessos reais (200)
+        'circuit_breaker_error_rate',  # Taxa de erro que ativa CB
+        'circuit_state_changes',  # Mudanças de estado do CB
     }
     
     with open(file_path, 'r') as f:
@@ -22,11 +29,13 @@ def load_k6_results(file_path):
                     timestamp = datetime.strptime(metric['data']['time'].split('.')[0], '%Y-%m-%dT%H:%M:%S')
                     name = metric['metric']
                     value = metric['data']['value']
+                    tags = metric['data'].get('tags', {})
                     
                     data.append({
                         'timestamp': timestamp,
                         'metric_name': name,
-                        'value': value
+                        'value': value,
+                        'tags': tags
                     })
             except json.JSONDecodeError:
                 continue
@@ -98,6 +107,45 @@ def analyze_performance(v1_path, v2_path):
     plt.savefig('analysis/reports/high_concurrency_analysis.png', dpi=300, bbox_inches='tight')
     
     print("Calculando estatísticas...")
+    
+    # Função auxiliar para calcular métricas do Circuit Breaker
+    def calculate_cb_metrics(df_version, version_name):
+        # Total de requisições
+        total_reqs = len(df_version[df_version['metric_name'] == 'http_req_failed'])
+        
+        # Falhas reais (500/503) - ANTES do CB ativar
+        real_failures = df_version[df_version['metric_name'] == 'real_failures']['value'].sum()
+        
+        # Respostas de fallback (202) - CB ATIVO
+        fallback_responses = df_version[df_version['metric_name'] == 'fallback_responses']['value'].sum()
+        
+        # Sucessos reais (200)
+        successful_responses = df_version[df_version['metric_name'] == 'successful_responses']['value'].sum()
+        
+        # Taxa de erro REAL que ativou o Circuit Breaker
+        error_rate_data = df_version[df_version['metric_name'] == 'circuit_breaker_error_rate']['value']
+        if len(error_rate_data) > 0:
+            # error_rate já vem como boolean (1 para erro, 0 para sucesso)
+            error_rate = (error_rate_data.sum() / len(error_rate_data)) * 100
+        else:
+            error_rate = 0.0
+        
+        # Mudanças de estado do CB
+        cb_state_changes = len(df_version[df_version['metric_name'] == 'circuit_state_changes'])
+        
+        return {
+            'total_requests': total_reqs,
+            'real_failures': int(real_failures),
+            'fallback_responses': int(fallback_responses),
+            'successful_responses': int(successful_responses),
+            'error_rate': round(error_rate, 2),
+            'cb_state_changes': cb_state_changes
+        }
+    
+    # Calcular métricas para V1 e V2
+    cb_metrics_v1 = calculate_cb_metrics(df_v1, 'V1 (Baseline)')
+    cb_metrics_v2 = calculate_cb_metrics(df_v2, 'V2 (Circuit Breaker)')
+    
     # Gerar estatísticas
     stats = pd.DataFrame({
         'Métrica': [
@@ -106,25 +154,55 @@ def analyze_performance(v1_path, v2_path):
             'Tempo de Resposta P99 (ms)',
             'Taxa de Requisições Média (req/s)',
             'Máximo de VUs',
-            'Total de Requisições'
+            'Total de Requisições',
+            '--- Circuit Breaker ---',
+            'Falhas Reais (500/503)',
+            'Respostas Fallback (202)',
+            'Sucessos Reais (200)',
+            'Taxa de Erro Real (%)',
+            'Mudanças de Estado CB',
         ]
     })
     
-    for version in ['V1 (Baseline)', 'V2 (Circuit Breaker)']:
+    for version, cb_metrics in [('V1 (Baseline)', cb_metrics_v1), ('V2 (Circuit Breaker)', cb_metrics_v2)]:
         rt_data = response_times[response_times['version'] == version]['value']
         req_data = reqs[reqs['version'] == version]['value']
         vu_data = vus[vus['version'] == version]['value']
         
         stats[version] = [
-            round(rt_data.mean(), 2),
-            round(rt_data.quantile(0.95), 2),
-            round(rt_data.quantile(0.99), 2),
-            round(req_data.mean(), 2),
-            int(vu_data.max()),
-            int(req_data.sum())
+            round(rt_data.mean(), 2) if len(rt_data) > 0 else 0,
+            round(rt_data.quantile(0.95), 2) if len(rt_data) > 0 else 0,
+            round(rt_data.quantile(0.99), 2) if len(rt_data) > 0 else 0,
+            round(req_data.mean(), 2) if len(req_data) > 0 else 0,
+            int(vu_data.max()) if len(vu_data) > 0 else 0,
+            cb_metrics['total_requests'],
+            '---',
+            cb_metrics['real_failures'],
+            cb_metrics['fallback_responses'],
+            cb_metrics['successful_responses'],
+            cb_metrics['error_rate'],
+            cb_metrics['cb_state_changes'],
         ]
     
     stats.to_csv('analysis/reports/high_concurrency_stats.csv', index=False)
+    
+    # Imprimir explicação
+    print("\n" + "="*80)
+    print("EXPLICAÇÃO DAS MÉTRICAS DO CIRCUIT BREAKER")
+    print("="*80)
+    print("\n📊 V2 (Com Circuit Breaker):")
+    print(f"  • Falhas Reais: {cb_metrics_v2['real_failures']} requisições retornaram 500/503")
+    print(f"    → Estas falhas ATIVARAM o Circuit Breaker")
+    print(f"\n  • Respostas Fallback: {cb_metrics_v2['fallback_responses']} requisições retornaram 202")
+    print(f"    → Circuit Breaker ATIVO protegendo o sistema")
+    print(f"\n  • Sucessos Reais: {cb_metrics_v2['successful_responses']} requisições retornaram 200")
+    print(f"    → Transações processadas com sucesso")
+    print(f"\n  • Taxa de Erro Real: {cb_metrics_v2['error_rate']}%")
+    print(f"    → Percentual de requisições que FALHARAM e ativaram o CB")
+    print(f"\n  • Mudanças de Estado: {cb_metrics_v2['cb_state_changes']} transições")
+    print(f"    → Circuit Breaker abrindo/fechando conforme necessário")
+    print("\n" + "="*80)
+    
     return stats
 
 if __name__ == "__main__":

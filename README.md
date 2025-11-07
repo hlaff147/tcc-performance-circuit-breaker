@@ -135,9 +135,25 @@ O experimento inclui diversos cenários para avaliar o comportamento do sistema:
 
 ## 📝 Documentação
 
-- `docs/chapters/`: Documentação detalhada do experimento
+### 🎯 Documentos Principais (INÍCIO AQUI!)
+
+Para facilitar a escrita do TCC, foram criados documentos organizacionais:
+
+1. **[📊 Sumário Executivo](docs/SUMARIO_EXECUTIVO.md)** - Visão geral completa da análise
+2. **[📑 Índice Mestre](docs/INDICE_MESTRE.md)** - Navegação por TODOS os documentos do projeto
+3. **[📋 Relatório de Incongruências](docs/ANALISE_INCONGRUENCIAS.md)** - Problemas identificados e soluções
+4. **[📚 Guia de Organização](docs/GUIA_ORGANIZACAO_TCC.md)** - Estrutura, TODOs e checklists
+
+### 📖 Conteúdo do TCC
+
+- `docs/chapters/`: Capítulos do TCC em Markdown
+  - 01-introducao-e-justificativa.md
+  - 02-metodologia-e-design-experimento.md
+  - 03-resultados-e-discussao.md
+  - 04-conclusao.md
 - `docs/images/`: Diagramas e screenshots
 - `analysis/reports/`: Relatórios de análise
+- `analysis_results/`: Resultados consolidados e gráficos
 
 ## 🔄 Fluxos de Execução
 
