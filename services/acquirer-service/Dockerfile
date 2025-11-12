@@ -2,9 +2,14 @@
 
 FROM maven:3.8.8-eclipse-temurin-17 AS build
 WORKDIR /workspace
+
+# Cache Maven dependencies
 COPY pom.xml .
+RUN mvn dependency:go-offline -B || true
+
+# Build application with retry
 COPY src ./src
-RUN mvn -B package -DskipTests
+RUN mvn -B package -DskipTests -Dmaven.wagon.http.retryHandler.count=3 -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app

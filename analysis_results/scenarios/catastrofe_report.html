@@ -1,0 +1,200 @@
+
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <title>Análise: catastrofe</title>
+            <style>
+                body { 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    margin: 40px; 
+                    background-color: #f5f5f5; 
+                    color: #333; 
+                }
+                .container { 
+                    max-width: 1400px; 
+                    margin: 0 auto; 
+                    background-color: #fff; 
+                    padding: 40px; 
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    border-radius: 8px;
+                }
+                h1 { 
+                    color: #2c3e50; 
+                    border-bottom: 3px solid #3498db; 
+                    padding-bottom: 15px; 
+                }
+                h2 { 
+                    color: #34495e; 
+                    margin-top: 40px;
+                    border-bottom: 2px solid #ecf0f1;
+                    padding-bottom: 10px;
+                }
+                table { 
+                    border-collapse: collapse; 
+                    width: 100%; 
+                    margin: 25px 0;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                }
+                th, td { 
+                    border: 1px solid #ddd; 
+                    padding: 12px; 
+                    text-align: left; 
+                }
+                th { 
+                    background-color: #3498db; 
+                    color: white; 
+                    font-weight: 600;
+                }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                tr:hover { background-color: #f5f5f5; }
+                img { 
+                    max-width: 100%; 
+                    height: auto; 
+                    margin: 20px 0;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                .metric-card {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                }
+                .metric-card h3 {
+                    margin: 0 0 10px 0;
+                    color: white;
+                }
+                .improvement {
+                    color: #27ae60;
+                    font-weight: bold;
+                }
+                .degradation {
+                    color: #e74c3c;
+                    font-weight: bold;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🎯 Análise Detalhada: CATASTROFE</h1>
+                
+                
+                <div class="metric-card">
+                    <h3>💎 BENEFÍCIOS DO CIRCUIT BREAKER</h3>
+                    <ul>
+                        <li><strong>Melhoria no tempo médio:</strong> 
+                            <span class="degradation">
+                                -26.03%
+                            </span>
+                        </li>
+                        <li><strong>Melhoria no P95:</strong> 
+                            <span class="degradation">
+                                -0.04%
+                            </span>
+                        </li>
+                        <li><strong>Melhoria no P99:</strong> 
+                            <span class="degradation">
+                                -0.12%
+                            </span>
+                        </li>
+                        <li><strong>Requisições protegidas:</strong> 0</li>
+                        <li><strong>Tempo total economizado:</strong> 0.00s</li>
+                    </ul>
+                </div>
+                
+                
+                <h2>📊 Tempos de Resposta</h2>
+                <table border="1" class="dataframe table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Version</th>
+      <th>Avg Response (ms)</th>
+      <th>P50 (ms)</th>
+      <th>P95 (ms)</th>
+      <th>P99 (ms)</th>
+      <th>Max (ms)</th>
+      <th>Fast Requests (%)</th>
+      <th>Slow Requests (%)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>V1</td>
+      <td>474.666345</td>
+      <td>5.054709</td>
+      <td>3007.217608</td>
+      <td>3013.846890</td>
+      <td>3652.357002</td>
+      <td>84.403183</td>
+      <td>15.583554</td>
+    </tr>
+    <tr>
+      <td>V2</td>
+      <td>598.204218</td>
+      <td>5.012333</td>
+      <td>3008.352060</td>
+      <td>3017.487235</td>
+      <td>3352.191084</td>
+      <td>80.269389</td>
+      <td>19.730611</td>
+    </tr>
+  </tbody>
+</table>
+                
+                <h2>🔍 Distribuição de Status</h2>
+                <table border="1" class="dataframe table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Version</th>
+      <th>Total Requests</th>
+      <th>Success (200)</th>
+      <th>API Failure (500)</th>
+      <th>CB Open (503)</th>
+      <th>Fallback (202)</th>
+      <th>Success Rate (%)</th>
+      <th>Total Success Rate (%)</th>
+      <th>API Failure Rate (%)</th>
+      <th>CB Protection Rate (%)</th>
+      <th>Fallback Rate (%)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>V1</td>
+      <td>52780.0</td>
+      <td>37024.0</td>
+      <td>15755.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>70.147783</td>
+      <td>70.147783</td>
+      <td>29.850322</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <td>V2</td>
+      <td>48777.0</td>
+      <td>43904.0</td>
+      <td>4865.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>90.009636</td>
+      <td>90.009636</td>
+      <td>9.973963</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+  </tbody>
+</table>
+                
+                <h2>📈 Gráficos Comparativos</h2>
+                <img src="plots/catastrofe/response_comparison.png" alt="Comparação de Latência">
+                <img src="plots/catastrofe/status_distribution.png" alt="Distribuição de Status">
+            </div>
+        </body>
+        </html>
+        

@@ -5,17 +5,39 @@ resilience4j:
   circuitbreaker:
     instances:
       adquirente-cb:
-        failureRateThreshold: 50
+        # CONFIGURAÇÃO OTIMIZADA PARA ALTA DISPONIBILIDADE
+        # Objetivo: Proteger durante crises MAS maximizar sucesso na recuperação
+        
+        # Abre com 60% de falhas (mais tolerante - era 50%)
+        failureRateThreshold: 60
         slidingWindowType: COUNT_BASED
-        slidingWindowSize: 20
-        minimumNumberOfCalls: 10
-        waitDurationInOpenState: 10s
-        permittedNumberOfCallsInHalfOpenState: 5
+        # Janela de 15 chamadas (equilíbrio entre reatividade e estabilidade)
+        slidingWindowSize: 15
+        # Avalia após 8 chamadas
+        minimumNumberOfCalls: 8
+        
+        # CHAVE: Fecha rápido quando API se recupera
+        # Tenta reabrir após apenas 3s (era 10s)
+        waitDurationInOpenState: 3s
+        
+        # CHAVE: Testa com mais chamadas para garantir recuperação real
+        # Se 7 de 10 funcionarem (70%), fecha o circuito
+        permittedNumberOfCallsInHalfOpenState: 10
+        
         registerHealthIndicator: true
+        
+        # Slow call: mais tolerante
+        slowCallDurationThreshold: 2500ms
+        slowCallRateThreshold: 85
+        
+        # Transição automática de half-open para closed se taxa de sucesso > 50%
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        
   timelimiter:
     instances:
       adquirente-cb:
-        timeoutDuration: 2500ms
+        # Timeout generoso: 3s (permite API lenta se recuperar)
+        timeoutDuration: 3000ms
 
 management:
   endpoints:

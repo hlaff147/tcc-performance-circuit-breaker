@@ -1,0 +1,244 @@
+
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <title>Análise: rajadas</title>
+            <style>
+                body { 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    margin: 40px; 
+                    background-color: #f5f5f5; 
+                    color: #333; 
+                }
+                .container { 
+                    max-width: 1400px; 
+                    margin: 0 auto; 
+                    background-color: #fff; 
+                    padding: 40px; 
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    border-radius: 8px;
+                }
+                h1 { 
+                    color: #2c3e50; 
+                    border-bottom: 3px solid #3498db; 
+                    padding-bottom: 15px; 
+                }
+                h2 { 
+                    color: #34495e; 
+                    margin-top: 40px;
+                    border-bottom: 2px solid #ecf0f1;
+                    padding-bottom: 10px;
+                }
+                table { 
+                    border-collapse: collapse; 
+                    width: 100%; 
+                    margin: 25px 0;
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                }
+                th, td { 
+                    border: 1px solid #ddd; 
+                    padding: 12px; 
+                    text-align: left; 
+                }
+                th { 
+                    background-color: #3498db; 
+                    color: white; 
+                    font-weight: 600;
+                }
+                tr:nth-child(even) { background-color: #f9f9f9; }
+                tr:hover { background-color: #f5f5f5; }
+                img { 
+                    max-width: 100%; 
+                    height: auto; 
+                    margin: 20px 0;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }
+                .metric-card {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                }
+                .metric-card h3 {
+                    margin: 0 0 10px 0;
+                    color: white;
+                }
+                .improvement {
+                    color: #27ae60;
+                    font-weight: bold;
+                }
+                .degradation {
+                    color: #e74c3c;
+                    font-weight: bold;
+                }
+                .info-box {
+                    background-color: #e8f4f8;
+                    border-left: 4px solid #3498db;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 4px;
+                }
+                .warning-box {
+                    background-color: #fff3cd;
+                    border-left: 4px solid #ffc107;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 4px;
+                }
+                .success-box {
+                    background-color: #d4edda;
+                    border-left: 4px solid #28a745;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 4px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🎯 Análise Detalhada: RAJADAS</h1>
+                
+                
+                <div class="warning-box">
+                    <h4>📌 Contexto do Cenário: Rajadas Intermitentes</h4>
+                    <p><strong>Situação:</strong> 3 períodos de falha total (100%) alternados com operação normal.</p>
+                    <p><strong>Objetivo do CB:</strong> Abrir/fechar rapidamente em resposta às rajadas, protegendo em cada crise.</p>
+                    <p><strong>Interpretação correta:</strong> CB bloqueou 0.0% das requests nas rajadas para <strong>evitar timeouts de 3s</strong>. V2 reduziu falhas reais em 5.8%.</p>
+                </div>
+                
+                
+                
+                <div class="metric-card">
+                    <h3>💎 BENEFÍCIOS DO CIRCUIT BREAKER</h3>
+                    <ul>
+                        <li><strong>Redução de Falhas (500):</strong> 
+                            <span class="improvement">
+                                5.76%
+                            </span>
+                        </li>
+                        <li><strong>Melhoria no tempo médio:</strong> 
+                            <span class="improvement">
+                                10.76%
+                            </span>
+                        </li>
+                        <li><strong>Melhoria no P95:</strong> 
+                            <span class="degradation">
+                                -0.00%
+                            </span>
+                        </li>
+                        <li><strong>Melhoria no P99:</strong> 
+                            <span class="degradation">
+                                -0.01%
+                            </span>
+                        </li>
+                        <li><strong>Requisições protegidas:</strong> 0</li>
+                        <li><strong>Tempo total economizado:</strong> 0.00s</li>
+                    </ul>
+                </div>
+                
+                
+                <h2>📊 Tempos de Resposta</h2>
+                <table border="1" class="dataframe table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Version</th>
+      <th>Avg Response (ms)</th>
+      <th>P50 (ms)</th>
+      <th>P95 (ms)</th>
+      <th>P99 (ms)</th>
+      <th>Max (ms)</th>
+      <th>Fast Requests (%)</th>
+      <th>Slow Requests (%)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>V1</td>
+      <td>461.417086</td>
+      <td>4.315375</td>
+      <td>3006.475918</td>
+      <td>3011.241430</td>
+      <td>3065.289376</td>
+      <td>84.776622</td>
+      <td>15.223378</td>
+    </tr>
+    <tr>
+      <td>V2</td>
+      <td>411.760622</td>
+      <td>4.498750</td>
+      <td>3006.554210</td>
+      <td>3011.638123</td>
+      <td>3061.408085</td>
+      <td>86.441005</td>
+      <td>13.558995</td>
+    </tr>
+  </tbody>
+</table>
+                
+                <h2>🔍 Distribuição de Status</h2>
+                <table border="1" class="dataframe table">
+  <thead>
+    <tr style="text-align: right;">
+      <th>Version</th>
+      <th>Total Requests</th>
+      <th>Success (200)</th>
+      <th>API Failure (500)</th>
+      <th>CB Open (503)</th>
+      <th>Fallback (202)</th>
+      <th>Success Rate (%)</th>
+      <th>Total Success Rate (%)</th>
+      <th>API Failure Rate (%)</th>
+      <th>CB Protection Rate (%)</th>
+      <th>Fallback Rate (%)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>V1</td>
+      <td>80245.0</td>
+      <td>76175.0</td>
+      <td>4069.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>94.928033</td>
+      <td>94.928033</td>
+      <td>5.070721</td>
+      <td>0.0</td>
+      <td>0.000000</td>
+    </tr>
+    <tr>
+      <td>V2</td>
+      <td>83015.0</td>
+      <td>70612.0</td>
+      <td>3967.0</td>
+      <td>0.0</td>
+      <td>8429.0</td>
+      <td>85.059327</td>
+      <td>95.212913</td>
+      <td>4.778654</td>
+      <td>0.0</td>
+      <td>10.153587</td>
+    </tr>
+  </tbody>
+</table>
+                
+                
+                <div class="success-box">
+                    <h4>✅ Por que a "baixa taxa de sucesso" do V2 é na verdade um SUCESSO?</h4>
+                    <p><strong>V1 sem CB:</strong> Taxa de sucesso 94.9%, mas com 5.1% de falhas reais (500) e tempo médio de 461ms (esperando timeouts).</p>
+                    <p><strong>V2 com CB:</strong> Taxa de sucesso 85.1%, mas com apenas 4.8% de falhas reais (500) e tempo médio de 412ms.</p>
+                    <p><strong>Conclusão:</strong> CB bloqueou 0.0% das requests (503) para <strong>proteger contra sobrecarga</strong> e <strong>evitar timeouts de 3 segundos</strong>. O resultado é <strong>5.8% menos falhas reais</strong> e <strong>10.8% de melhoria no tempo de resposta</strong>!</p>
+                </div>
+                
+                
+                <h2>📈 Gráficos Comparativos</h2>
+                <img src="plots/rajadas/response_comparison.png" alt="Comparação de Latência">
+                <img src="plots/rajadas/status_distribution.png" alt="Distribuição de Status">
+            </div>
+        </body>
+        </html>
+        

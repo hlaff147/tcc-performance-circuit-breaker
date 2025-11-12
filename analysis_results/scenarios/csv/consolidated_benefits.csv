@@ -1,0 +1,2 @@
+Scenario,Response Time Improvement (%),P95 Improvement (%),P99 Improvement (%),Protected Requests,Total Time Saved (s),Failure Reduction (%),V1 Failure Rate (%),V2 Failure Rate (%),Fast Response Increase (%),Slow Response Decrease (%)
+rajadas,10.761730798640427,-0.002604102015951015,-0.013173703575698083,0.0,0.0,5.759860617916792,5.070720917191102,4.778654460037343,1.664383041354938,1.6643830413549345

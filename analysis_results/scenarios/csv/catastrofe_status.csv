@@ -1,0 +1,3 @@
+Version,Total Requests,Success (200),API Failure (500),CB Open (503),Fallback (202),Success Rate (%),Total Success Rate (%),API Failure Rate (%),CB Protection Rate (%),Fallback Rate (%)
+V1,52780.0,37024.0,15755.0,0.0,0.0,70.14778325123153,70.14778325123153,29.850322091701404,0.0,0.0
+V2,48777.0,43904.0,4865.0,0.0,0.0,90.00963568895176,90.00963568895176,9.973963138364393,0.0,0.0

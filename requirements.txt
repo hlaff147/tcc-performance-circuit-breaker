@@ -1,4 +1,7 @@
 pandas
+numpy
 matplotlib
+seaborn
+jinja2
 prometheus-api-client
 # k6-summary (opcional, para parsing avançado do JSON do k6)

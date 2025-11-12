@@ -2,6 +2,19 @@
 
 Este repositório contém o código-fonte e a documentação completa do experimento desenvolvido para meu Trabalho de Conclusão de Curso, que analisa o impacto do padrão Circuit Breaker na resiliência de microsserviços.
 
+## 🎯 Descoberta Importante
+
+**Atualização:** Os testes iniciais mostraram que o Circuit Breaker oferece apenas **~1% de melhoria** em cenários de operação normal com falhas distribuídas (10%). Isto é **esperado e correto** - o CB não é projetado para brilhar em condições normais.
+
+Criamos **3 novos cenários críticos** onde o CB demonstra seu verdadeiro valor:
+- 🔥 **Falha Catastrófica:** Ganho esperado de 70-80% em latência
+- 📉 **Degradação Gradual:** Ganho esperado de 30-40% em latência  
+- 🌊 **Rajadas Intermitentes:** Ganho esperado de 40-50% em latência
+
+**📖 Leia:** [COMPARACAO_ESPERADA.md](COMPARACAO_ESPERADA.md) e [GUIA_CENARIOS_CRITICOS.md](GUIA_CENARIOS_CRITICOS.md)
+
+---
+
 ## 📖 Visão Geral
 
 O projeto consiste em um experimento controlado que compara duas versões de um microsserviço de pagamentos:
@@ -139,10 +152,65 @@ O experimento inclui diversos cenários para avaliar o comportamento do sistema:
 
 Para facilitar a escrita do TCC, foram criados documentos organizacionais:
 
-1. **[📊 Sumário Executivo](docs/SUMARIO_EXECUTIVO.md)** - Visão geral completa da análise
-2. **[📑 Índice Mestre](docs/INDICE_MESTRE.md)** - Navegação por TODOS os documentos do projeto
-3. **[📋 Relatório de Incongruências](docs/ANALISE_INCONGRUENCIAS.md)** - Problemas identificados e soluções
-4. **[📚 Guia de Organização](docs/GUIA_ORGANIZACAO_TCC.md)** - Estrutura, TODOs e checklists
+1. **[� COMPARAÇÃO ESPERADA](COMPARACAO_ESPERADA.md)** - ⭐ **NOVO!** Análise detalhada baseline vs crítico
+2. **[🎯 GUIA CENÁRIOS CRÍTICOS](GUIA_CENARIOS_CRITICOS.md)** - ⭐ **NOVO!** Como executar e analisar
+3. **[�📊 Sumário Executivo](docs/SUMARIO_EXECUTIVO.md)** - Visão geral completa da análise
+4. **[📑 Índice Mestre](docs/INDICE_MESTRE.md)** - Navegação por TODOS os documentos do projeto
+5. **[📋 Relatório de Incongruências](docs/ANALISE_INCONGRUENCIAS.md)** - Problemas identificados e soluções
+6. **[📚 Guia de Organização](docs/GUIA_ORGANIZACAO_TCC.md)** - Estrutura, TODOs e checklists
+
+## 🚀 Início Rápido
+
+### Pré-requisitos
+- Docker e Docker Compose
+- Python 3.8+
+- 8GB RAM disponível
+
+### 🔥 Executar Cenários Críticos (Recomendado para TCC)
+
+```bash
+# 1. Subir a infraestrutura
+docker-compose up -d
+
+# 2. Executar cenário de falha catastrófica (mais impactante)
+./run_and_analyze.sh catastrofe
+
+# 3. Ou executar todos os cenários (~45min)
+./run_and_analyze.sh all
+
+# 4. Visualizar relatórios
+# Os relatórios HTML abrem automaticamente!
+# Veja também: analysis_results/scenarios/csv/consolidated_benefits.csv
+```
+
+### 📊 Executar Cenário Baseline (Operação Normal)
+
+```bash
+# Executar teste baseline
+./run_experiment.py
+
+# Analisar resultados
+python3 analysis/scripts/analyzer.py
+
+# Ver relatório
+open analysis_results/analysis_report.html
+```
+
+### 📂 Estrutura de Resultados
+
+```
+analysis_results/
+├── scenarios/                          # ⭐ Novos cenários críticos
+│   ├── catastrofe_report.html
+│   ├── degradacao_report.html
+│   ├── rajadas_report.html
+│   ├── csv/
+│   │   └── consolidated_benefits.csv  # 📊 Use isto no TCC!
+│   └── plots/
+├── analysis_report.html                # Relatório baseline
+└── csv/
+    └── summary_analysis.csv
+```
 
 ### 📖 Conteúdo do TCC
 

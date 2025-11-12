@@ -1,0 +1,4 @@
+scenario,p_value,effect_size,significant_difference
+Normal,,inf,False
+Latencia,,inf,False
+Falha,,inf,False

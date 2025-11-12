@@ -9,7 +9,7 @@ O experimento consiste em 6 execuções de teste (3 cenários x 2 versões). Cri
    * Exemplo: `export PAYMENT_SERVICE_VERSION=v2`
 3. **Subir o ambiente:** `docker-compose up -d --build`.
 4. **Conferir monitoramento:** Grafana em `http://localhost:3000` (admin/admin) e Prometheus em `http://localhost:9090`.
-5. **Rodar cenários k6:** execute os três comandos `docker run ... cenario-*.js` indicados abaixo para a versão atual (salvando em `V1_*.json` ou `V2_*.json`).
+5. **Rodar cenário k6:** execute o comando `docker run ... cenario-completo.js` indicado abaixo, salvando a saída em `V1_Completo.json` ou `V2_Completo.json` dependendo do serviço que estiver ativo.
 6. **Acompanhar métricas:** use o Grafana para observar CPU, memória, threads e, na V2, o estado do circuit breaker.
 7. **Encerrar a rodada:** `docker-compose down -v`.
 8. **Trocar de versão:** ajuste novamente o `build.context` para a outra pasta (`servico-pagamento-v1` ↔ `servico-pagamento-v2`).
@@ -39,9 +39,7 @@ O experimento consiste em 6 execuções de teste (3 cenários x 2 versões). Cri
 2.  **Subir Ambiente:** `docker-compose up -d --build`.
 3.  **Acessar Monitoramento:** Abra o Grafana (`http://localhost:3000`).
 4.  **Executar Testes (Coletando JSON):**
-    * **Cenário A:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-A-normal.js --out json=/scripts/results/V2_Normal.json`
-    * **Cenário B:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-B-latencia.js --out json=/scripts/results/V2_Latencia.json`
-    * **Cenário C:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6-scripts:/scripts -v $PWD/k6-results:/scripts/results grafana/k6:latest run /scripts/cenario-C-falha.js --out json=/scripts/results/V2_Falha.json`
+    * **Cenário Completo:** `docker run --rm -i --network=tcc-performance-circuit-breaker_tcc-network -v $PWD/k6/scripts:/scripts -v $PWD/k6/results:/results grafana/k6:latest run /scripts/cenario-completo.js --out json=/results/V2_Completo.json`
 5.  **Observar:** *Durante* os cenários B e C, observe o Grafana.
     * **Métricas Chave do CB:** `resilience4j_circuitbreaker_state` (você verá mudar de 1 (CLOSED) para 0 (OPEN)), `resilience4j_circuitbreaker_calls_total` (observe o aumento de chamadas `failed` e `not_permitted`).
     * **Métricas de Desempenho:** Observe como `tomcat_threads_busy` e `jvm_threads_live` permanecem **baixos e estáveis**. Verifique `container_cpu_usage_seconds_total`, que não deve disparar, provando que o CB está protegendo o serviço.

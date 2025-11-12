@@ -10,14 +10,14 @@ Circuit Breaker **NÃO PODE** ter 0% de erro. Agora rastreamos:
 
 ## 🚀 Reexecutar Testes
 
-### Opção 1: Apenas Alta Concorrência (5-10 min)
+### Executar Cenário Completo (~12 min por versão)
 ```bash
-./rerun_high_concurrency.sh
+./rerun_high_concurrency.sh  # Agora executa o cenário completo único
 ```
 
-### Opção 2: Todos os Cenários (~1 hora)
+Ou usando Python:
 ```bash
-./run_all_tests.sh
+python3 run_experiment.py  # Executa V1 e V2 do cenário completo
 ```
 
 ## 📊 Ver Resultados
@@ -25,8 +25,8 @@ Circuit Breaker **NÃO PODE** ter 0% de erro. Agora rastreamos:
 ```bash
 # Extrair métricas dos JSONs
 python3 analysis/scripts/extract_cb_metrics.py \
-  k6/results/V1_Alta_Concorrencia.json \
-  k6/results/V2_Alta_Concorrencia.json
+  k6/results/V1_Completo.json \
+  k6/results/V2_Completo.json
 
 # Análise completa com gráficos
 python3 analysis/scripts/analyze_high_concurrency.py

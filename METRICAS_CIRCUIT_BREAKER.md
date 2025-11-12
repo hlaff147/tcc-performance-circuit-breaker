@@ -112,9 +112,7 @@ if (response.status === 200) {
 ## 📝 Arquivos Modificados
 
 ### Scripts K6 (TODOS os 7 cenários)
-- ✅ `k6/scripts/cenario-A-normal.js`
-- ✅ `k6/scripts/cenario-B-latencia.js`
-- ✅ `k6/scripts/cenario-C-falha.js`
+- ✅ `k6/scripts/cenario-completo.js`
 - ✅ `k6/scripts/cenario-D-estresse-crescente.js`
 - ✅ `k6/scripts/cenario-E-recuperacao.js`
 - ✅ `k6/scripts/cenario-F-falhas-intermitentes.js`

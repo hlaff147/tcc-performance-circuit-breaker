@@ -1,5 +1,3 @@
-version: "3.8"
-
 networks:
   tcc-network:
     driver: bridge
@@ -45,7 +43,8 @@ services:
   k6-tester:
     image: grafana/k6:latest
     container_name: k6-tester
-    command: sleep infinity
+    entrypoint: ["/bin/sh"]
+    command: ["-c", "while true; do sleep 3600; done"]
     volumes:
       - ./k6/scripts:/scripts # Mapeia os scripts k6
       - ./k6/results:/scripts/results # Mapeia a pasta de resultados

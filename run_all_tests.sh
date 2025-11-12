@@ -36,13 +36,7 @@ fi
 mkdir -p "${K6_RESULTS_HOST_DIR}"
 
 SCENARIOS=(
-  "Normal:cenario-A-normal.js"
-  "Latencia:cenario-B-latencia.js"
-  "Falha:cenario-C-falha.js"
-  "Estresse:cenario-D-estresse-crescente.js"
-  "Recuperacao:cenario-E-recuperacao.js"
-  "FalhasIntermitentes:cenario-F-falhas-intermitentes.js"
-  "AltaConcorrencia:cenario-G-alta-concorrencia.js"
+  "Completo:cenario-completo.js"
 )
 
 resolve_scenario_path() {
@@ -135,11 +129,14 @@ run_k6_scenarios() {
     # Executa o k6 e ignora o código de saída para continuar mesmo se o teste falhar
     docker run --rm -i \
       --network="${NETWORK_NAME}" \
+      -e "PAYMENT_BASE_URL=http://servico-pagamento:8080" \
+      -e "PAYMENT_MODE_DISTRIBUTION=normal:0.7,latencia:0.2,falha:0.1" \
       -v "${scenario_host_dir}:/scripts:ro" \
       -v "${K6_RESULTS_HOST_DIR}:/results" \
       "${K6_IMAGE}" run \
       "/scripts/${scenario_basename}" \
-      --out "json=/results/${version_label}_${scenario_label}.json" || true
+      --out "json=/results/${version_label}_${scenario_label}.json" \
+      --summary-export "/results/${version_label}_${scenario_label}_summary.json" || true
 
     echo "Resultado salvo em ${output_file}"
     

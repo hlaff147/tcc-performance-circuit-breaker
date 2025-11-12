@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Script para reexecutar APENAS o cenário de Alta Concorrência com métricas corretas
+# Script para reexecutar o cenário completo com métricas corretas
 # Autor: TCC Performance Circuit Breaker
-# Data: 2025-11-06
+# Data: 2025-11-07
 
 set -e  # Exit on error
 
 echo "=========================================="
-echo "REEXECUTANDO CENÁRIO G - ALTA CONCORRÊNCIA"
+echo "REEXECUTANDO CENÁRIO COMPLETO"
 echo "com métricas CORRETAS do Circuit Breaker"
 echo "=========================================="
 echo ""
@@ -32,11 +32,11 @@ echo ""
 echo "📦 Fazendo backup dos resultados antigos..."
 BACKUP_DIR="k6/results/backup_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$BACKUP_DIR"
-if [ -f "k6/results/V1_Alta_Concorrencia.json" ]; then
-    mv k6/results/V1_Alta_Concorrencia.json "$BACKUP_DIR/"
+if [ -f "k6/results/V1_Completo.json" ]; then
+    mv k6/results/V1_Completo.json "$BACKUP_DIR/"
 fi
-if [ -f "k6/results/V2_Alta_Concorrencia.json" ]; then
-    mv k6/results/V2_Alta_Concorrencia.json "$BACKUP_DIR/"
+if [ -f "k6/results/V2_Completo.json" ]; then
+    mv k6/results/V2_Completo.json "$BACKUP_DIR/"
 fi
 echo "✅ Backup criado em $BACKUP_DIR"
 echo ""
@@ -45,11 +45,11 @@ echo ""
 echo "=========================================="
 echo "🔴 EXECUTANDO V1 (Baseline - Sem CB)"
 echo "=========================================="
-echo "Duração: ~5 minutos"
+echo "Duração: ~12 minutos"
 echo ""
 
-docker exec k6 run /scripts/cenario-G-alta-concorrencia.js \
-  --out json=/results/V1_Alta_Concorrencia.json
+docker exec k6 run /scripts/cenario-completo.js \
+  --out json=/results/V1_Completo.json
 
 echo ""
 echo "✅ V1 executado com sucesso!"
@@ -64,22 +64,22 @@ echo ""
 echo "=========================================="
 echo "🟢 EXECUTANDO V2 (Com Circuit Breaker)"
 echo "=========================================="
-echo "Duração: ~5 minutos"
+echo "Duração: ~12 minutos"
 echo ""
 
 # Modificar a URL base para V2
 sed 's|servico-pagamento:8080|servico-pagamento-v2:8080|g' \
-  k6/scripts/cenario-G-alta-concorrencia.js > /tmp/cenario-G-v2.js
+  k6/scripts/cenario-completo.js > /tmp/cenario-completo-v2.js
 
-docker exec -i k6 run - < /tmp/cenario-G-v2.js \
-  --out json=/results/V2_Alta_Concorrencia.json
+docker exec -i k6 run - < /tmp/cenario-completo-v2.js \
+  --out json=/results/V2_Completo.json
 
 echo ""
 echo "✅ V2 executado com sucesso!"
 echo ""
 
 # Restaurar arquivo original
-git checkout k6/scripts/cenario-G-alta-concorrencia.js 2>/dev/null || true
+git checkout k6/scripts/cenario-completo.js 2>/dev/null || true
 
 # Executar análise
 echo "=========================================="
@@ -88,8 +88,8 @@ echo "=========================================="
 echo ""
 
 python3 analysis/scripts/extract_cb_metrics.py \
-  k6/results/V1_Alta_Concorrencia.json \
-  k6/results/V2_Alta_Concorrencia.json
+  k6/results/V1_Completo.json \
+  k6/results/V2_Completo.json
 
 echo ""
 echo "=========================================="
@@ -97,8 +97,8 @@ echo "✅ EXECUÇÃO COMPLETA!"
 echo "=========================================="
 echo ""
 echo "Arquivos gerados:"
-echo "  • k6/results/V1_Alta_Concorrencia.json"
-echo "  • k6/results/V2_Alta_Concorrencia.json"
+echo "  • k6/results/V1_Completo.json"
+echo "  • k6/results/V2_Completo.json"
 echo ""
 echo "Backup anterior em:"
 echo "  • $BACKUP_DIR"
