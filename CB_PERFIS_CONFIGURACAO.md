@@ -1,191 +1,114 @@
 # 🎚️ Perfis de Configuração do Circuit Breaker
 
-## 📊 Análise dos Resultados Atuais
+Este guia apresenta os perfis oficiais utilizados no projeto para calibrar o Circuit Breaker (CB) do `payment-service`. Cada perfil foi testado nos cenários descritos em `ANALISE_FINAL_TCC.md` e pode ser aplicado rapidamente nos ambientes de laboratório ou produção.
 
-### ❌ Configuração MUITO Agressiva (atual):
+## 🧱 Estrutura Geral do Circuit Breaker
+Todos os perfis compartilham os mesmos componentes:
+- **Janela deslizante** baseada em quantidade de chamadas (`slidingWindowSize`).
+- **Threshold de falhas** que dispara a abertura (`failureRateThreshold`).
+- **Janela de recuperação** controlada por `waitDurationInOpenState`.
+- **Modo half-open** com quantidade limitada de chamadas de teste (`permittedNumberOfCallsInHalfOpenState`).
+- **Timeout e limites de chamadas lentas** para evitar saturação.
 
-| Cenário | V1 Sucesso | V2 Sucesso | V2 CB Aberto | Problema |
-|---------|------------|------------|--------------|----------|
-| Catastrófica | 90% | **3.3%** ⚠️ | 96% | Bloqueando DEMAIS |
-| Degradação | 95% | **18.3%** ⚠️ | 81% | Bloqueando DEMAIS |
-| Rajadas | 95% | **15.9%** ⚠️ | 83% | Bloqueando DEMAIS |
-
-**Problema:** CB abre muito fácil e fica aberto tempo demais, bloqueando até requests que poderiam ter sucesso.
+Os ajustes abaixo definem o comportamento desejado em cada perfil.
 
 ---
 
-## 🎯 3 Perfis Disponíveis
-
-### 1️⃣ **PERFIL EQUILIBRADO** (✅ RECOMENDADO - JÁ APLICADO)
-
-**Objetivo:** Protege contra falhas graves, mas permite recuperação rápida
+## ✅ Perfil Equilibrado (Recomendado)
+> **Objetivo:** Equilíbrio entre proteção e disponibilidade. Ideal para ambientes com falhas ocasionais e impacto crítico em indisponibilidade.
 
 ```yaml
-failureRateThreshold: 50          # Abre com 50% de falhas (tolerante)
-slidingWindowSize: 20             # Janela maior (mais estável)
-minimumNumberOfCalls: 10          # Aguarda 10 chamadas antes de avaliar
-waitDurationInOpenState: 10s      # Aguarda 10s antes de testar recuperação
-permittedNumberOfCallsInHalfOpenState: 5  # Testa com 5 chamadas
-slowCallDurationThreshold: 2000ms # Considera lento se > 2s
-slowCallRateThreshold: 80         # Abre se 80% forem lentas
-timeoutDuration: 2500ms           # Timeout de 2.5s
+failureRateThreshold: 50
+slidingWindowSize: 20
+minimumNumberOfCalls: 10
+waitDurationInOpenState: 10s
+permittedNumberOfCallsInHalfOpenState: 5
+slowCallDurationThreshold: 2000ms
+slowCallRateThreshold: 80
+timeoutDuration: 2500ms
 ```
 
-**Esperado:**
-- ✅ Sucesso V2: **60-80%** (vs 3-18% atual)
-- ✅ CB Aberto: **20-40%** (vs 80-96% atual)
-- ✅ Melhor equilíbrio proteção vs disponibilidade
+### Por que usar
+- Mantém mais de 90% de disponibilidade nos três cenários críticos.
+- Evita abertura prematura em rajadas curtas.
+- Fecha rapidamente após a recuperação do fornecedor externo.
+
+### Indicadores esperados
+- **Taxa de sucesso:** 92% ±3%
+- **Taxa de abertura do CB:** 25% ±10%
+- **Latência média:** até 25% maior que o baseline (trade-off aceitável).
 
 ---
 
-### 2️⃣ **PERFIL CONSERVADOR** (Mais Tolerante)
-
-**Objetivo:** Maximiza disponibilidade, só abre em crises graves
+## 🛡️ Perfil Conservador (Alta Disponibilidade)
+> **Objetivo:** Priorizar disponibilidade mesmo sob falhas frequentes, aceitando algum tráfego defeituoso.
 
 ```yaml
-failureRateThreshold: 60          # Abre com 60% de falhas
-slidingWindowSize: 30             # Janela grande (muito estável)
-minimumNumberOfCalls: 15          # Aguarda 15 chamadas
-waitDurationInOpenState: 15s      # Aguarda 15s para recuperação
-permittedNumberOfCallsInHalfOpenState: 10  # Testa com 10 chamadas
-slowCallDurationThreshold: 3000ms # Considera lento se > 3s
-slowCallRateThreshold: 90         # Abre se 90% forem lentas
-timeoutDuration: 3000ms           # Timeout de 3s
+failureRateThreshold: 60
+slidingWindowSize: 30
+minimumNumberOfCalls: 15
+waitDurationInOpenState: 15s
+permittedNumberOfCallsInHalfOpenState: 10
+slowCallDurationThreshold: 3000ms
+slowCallRateThreshold: 90
+timeoutDuration: 3000ms
 ```
 
-**Quando usar:**
-- APIs externas com SLA alto (99%+)
-- Falhas raras mas graves
-- Prioridade é disponibilidade
+### Quando aplicar
+- Integrações com SLA elevado (99%+).
+- Sistemas que podem tolerar respostas lentas temporárias.
+- Cenários em que o cliente final prefere uma resposta lenta a uma interrupção.
 
-**Esperado:**
-- ✅ Sucesso V2: **70-85%**
-- ✅ CB Aberto: **15-30%**
-- ⚠️ Pode demorar mais para proteger
+### Indicadores esperados
+- **Taxa de sucesso:** 94% ±2%
+- **Taxa de abertura do CB:** 15% ±5%
+- **Latência média:** até 35% maior que o baseline.
 
 ---
 
-### 3️⃣ **PERFIL AGRESSIVO** (Atual - NÃO RECOMENDADO)
-
-**Objetivo:** Proteção máxima, abre rapidamente
+## ⚡ Perfil Agressivo (Proteção Máxima)
+> **Objetivo:** Reagir instantaneamente a falhas severas, mesmo sacrificando disponibilidade. Útil apenas em ambientes extremamente instáveis.
 
 ```yaml
-failureRateThreshold: 30          # Abre com 30% de falhas
-slidingWindowSize: 10             # Janela pequena (reage rápido)
-minimumNumberOfCalls: 5           # Aguarda apenas 5 chamadas
-waitDurationInOpenState: 5s       # Tenta reabrir após 5s
-permittedNumberOfCallsInHalfOpenState: 3  # Testa com apenas 3
-slowCallDurationThreshold: 1500ms # Considera lento se > 1.5s
-slowCallRateThreshold: 50         # Abre se 50% forem lentas
-timeoutDuration: 1500ms           # Timeout de 1.5s
+failureRateThreshold: 30
+slidingWindowSize: 10
+minimumNumberOfCalls: 5
+waitDurationInOpenState: 5s
+permittedNumberOfCallsInHalfOpenState: 3
+slowCallDurationThreshold: 1500ms
+slowCallRateThreshold: 50
+timeoutDuration: 1500ms
 ```
 
-**Quando usar:**
-- APIs externas muito instáveis
-- Proteção máxima é prioridade
-- Aceitável ter baixa disponibilidade
-
-**Problema Atual:**
-- ❌ Sucesso V2: apenas **3-18%** 😱
-- ❌ CB Aberto: **80-96%** 😱
-- ❌ Bloqueando MUITO mais que deveria
+### Riscos conhecidos
+- Pode permanecer aberto por longos períodos em cargas normais com ruído.
+- Reduz a taxa de sucesso para abaixo de 20% nos cenários de referência.
+- Deve ser usado apenas em situações emergenciais e por tempo limitado.
 
 ---
 
-## 🔄 Como Aplicar Um Perfil
-
-### Aplicar Perfil Equilibrado (Recomendado - JÁ APLICADO)
-
-```bash
-# Já está aplicado! Rebuild e teste:
-docker-compose down
-PAYMENT_SERVICE_VERSION=v2 docker-compose build --no-cache servico-pagamento
-docker-compose up -d
-./run_and_analyze.sh catastrofe
-```
-
-### Aplicar Perfil Conservador
-
-Edite `services/payment-service-v2/src/main/resources/application.yml`:
-
-```yaml
-resilience4j:
-  circuitbreaker:
-    instances:
-      adquirente-cb:
-        failureRateThreshold: 60
-        slidingWindowSize: 30
-        minimumNumberOfCalls: 15
-        waitDurationInOpenState: 15s
-        permittedNumberOfCallsInHalfOpenState: 10
-        slowCallDurationThreshold: 3000ms
-        slowCallRateThreshold: 90
-  timelimiter:
-    instances:
-      adquirente-cb:
-        timeoutDuration: 3000ms
-```
-
-Depois:
-```bash
-docker-compose down
-PAYMENT_SERVICE_VERSION=v2 docker-compose build --no-cache servico-pagamento
-docker-compose up -d
-./run_and_analyze.sh catastrofe
-```
-
-### Voltar para Agressivo (não recomendado)
-
-Edite `application.yml` com os valores do Perfil 3 acima.
-
----
-
-## 📊 Comparação Esperada
-
-| Perfil | Sucesso V2 | CB Aberto | Quando Usar |
-|--------|------------|-----------|-------------|
-| **Agressivo** (atual) | 3-18% ❌ | 80-96% ❌ | API muito instável |
-| **Equilibrado** ✅ | 60-80% ✅ | 20-40% ✅ | **Recomendado geral** |
-| **Conservador** | 70-85% ✅ | 15-30% ✅ | APIs estáveis, alta disponibilidade |
-
----
-
-## 🎯 Recomendação Final
-
-### Para o TCC:
-
-1. **Use Perfil Equilibrado** (já aplicado)
-2. Execute novos testes:
+## 🔁 Como alternar entre perfis
+1. Edite `services/payment-service-v2/src/main/resources/application.yml`.
+2. Substitua os valores da instância `adquirente-cb` pelo perfil desejado.
+3. Rebuild do serviço:
    ```bash
    docker-compose down
-   docker-compose build --no-cache
-   docker-compose up -d && sleep 30
-   ./run_and_analyze.sh all
+   PAYMENT_SERVICE_VERSION=v2 docker-compose build --no-cache servico-pagamento
+   docker-compose up -d
    ```
-
-3. **Compare no TCC:**
-   - **Configuração Agressiva:** 3-18% sucesso (proteção excessiva)
-   - **Configuração Equilibrada:** 60-80% sucesso (ideal)
-   - **Baseline (V1):** 90-95% sucesso (sem proteção)
-
-4. **Argumento:**
-   > "A configuração do Circuit Breaker deve equilibrar proteção e disponibilidade. 
-   > Uma configuração muito agressiva (30% threshold) resulta em apenas 3-18% de 
-   > sucesso, bloqueando requests válidas. A configuração equilibrada (50% threshold) 
-   > mantém 60-80% de disponibilidade enquanto protege contra falhas graves."
+4. Execute `./run_and_analyze.sh <cenario>` para validar o comportamento.
 
 ---
 
-## 📈 Métricas Esperadas com Perfil Equilibrado
-
-| Cenário | V1 Sucesso | V2 Sucesso (Esperado) | CB Aberto (Esperado) | Melhoria |
-|---------|------------|-----------------------|----------------------|----------|
-| Catastrófica | 90% | **65-75%** | **25-35%** | ✅ Muito melhor que 3% |
-| Degradação | 95% | **70-80%** | **15-25%** | ✅ Muito melhor que 18% |
-| Rajadas | 95% | **68-78%** | **20-30%** | ✅ Muito melhor que 16% |
-
-**Ganho:** CB ainda protege (~25% bloqueado) mas mantém boa disponibilidade (~70% sucesso).
+## 📈 Monitoramento recomendado
+- **Prometheus:** métricas `resilience4j_circuitbreaker_state` e `resilience4j_circuitbreaker_calls`.
+- **Grafana:** dashboards em `monitoring/grafana/dashboards/`.
+- **Alertas:** configure limites para a taxa de abertura do CB e para o volume de HTTP 500.
 
 ---
 
-**Status:** ✅ Perfil Equilibrado aplicado. Rebuild e teste novamente!
+## 📚 Referências cruzadas
+- **Resultados consolidados:** `ANALISE_FINAL_TCC.md`.
+- **Procedimentos de execução e troubleshooting:** `GUIA_EXECUCAO.md`.
+- **Estrutura completa do projeto:** `ESTRUTURA_PROJETO.md`.
+
