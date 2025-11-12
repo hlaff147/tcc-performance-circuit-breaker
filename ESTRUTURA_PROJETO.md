@@ -24,35 +24,16 @@ tcc-performance-circuit-breaker/
 
 ## 📄 Arquivos .md na Raiz (Documentação Operacional)
 
-### ✅ Principais (Manter Sempre)
+### ✅ Documentação Essencial
 
 | Arquivo | Descrição | Quando Usar |
 |---------|-----------|-------------|
 | **README.md** | Documentação principal do projeto | Primeiro acesso ao projeto |
-| **ANALISE_FINAL_TCC.md** | Análise consolidada dos 3 cenários com resultados reais | Resultados finais para o TCC |
-| **CB_PERFIS_CONFIGURACAO.md** | Perfis de configuração do CB (agressivo, equilibrado, otimizado) | Configurar o Circuit Breaker |
-
-### 📚 Guias e Referências
-
-| Arquivo | Descrição | Status |
-|---------|-----------|--------|
-| **GUIA_RAPIDO.md** | Guia rápido de execução dos testes | Ativo |
-| **GUIA_CENARIOS_CRITICOS.md** | Explicação dos 3 cenários (catástrofe, degradação, rajadas) | Ativo |
-| **INSTRUCOES.md** | Instruções detalhadas de setup e execução | Ativo |
-| **METRICAS_CIRCUIT_BREAKER.md** | Documentação das métricas coletadas | Referência |
-| **OTIMIZACAO_ALTA_DISPONIBILIDADE.md** | Estratégia de otimização do CB para alta disponibilidade | Histórico/Referência |
-
-### 🔧 Documentos Técnicos/Históricos
-
-| Arquivo | Descrição | Status |
-|---------|-----------|--------|
-| **COMPARACAO_ESPERADA.md** | Expectativas vs realidade dos testes | Referência histórica |
-| **MUDANCA_CENARIO_UNICO.md** | Histórico da mudança para múltiplos cenários | Histórico |
-| **SOLUCAO_EXIT99.md** | Solução para bug do k6 (exit code 99) | Referência técnica |
-| **SUMARIO_EXECUTIVO_ATUALIZADO.md** | Sumário executivo dos resultados | Referência |
-| **PLANO_LIMPEZA.md** | Plano de organização dos arquivos .md | Organização interna |
-| **ORGANIZATION.md** | Organização antiga do projeto | Obsoleto/Histórico |
-| **RESUMO_CORRECOES.md** | Resumo de correções aplicadas | Histórico |
+| **GUIA_EXECUCAO.md** | Guia de execução, métricas e configuração | Executar testes e configurar CB |
+| **ANALISE_FINAL_TCC.md** | Análise consolidada dos 3 cenários | Resultados finais para o TCC |
+| **CB_PERFIS_CONFIGURACAO.md** | Perfis de configuração do CB | Referência de configurações |
+| **ESTRUTURA_PROJETO.md** | Estrutura completa do projeto | Navegar e entender organização |
+| **PLANO_LIMPEZA.md** | Plano de reorganização de arquivos | Referência de limpeza (este arquivo) |
 
 ---
 
@@ -128,11 +109,7 @@ Documentação estruturada do Trabalho de Conclusão de Curso.
 | **chapters/03-resultados-e-discussao.md** | Cap. 3: Resultados e Discussão |
 | **chapters/04-conclusao.md** | Cap. 4: Conclusão |
 | **diagramas/** | Diagramas PlantUML e imagens |
-| **SUMARIO_EXECUTIVO.md** | Sumário executivo |
-| **ACOES_PRIORITARIAS.md** | Ações prioritárias (histórico) |
-| **ANALISE_INCONGRUENCIAS.md** | Análise de incongruências (histórico) |
-| **GUIA_ORGANIZACAO_TCC.md** | Guia de organização |
-| **INDICE_MESTRE.md** | Índice mestre |
+| **images/** | Imagens utilizadas no TCC |
 
 ---
 

@@ -11,7 +11,13 @@ Criamos **3 novos cenários críticos** onde o CB demonstra seu verdadeiro valor
 - 📉 **Degradação Gradual:** Ganho esperado de 30-40% em latência  
 - 🌊 **Rajadas Intermitentes:** Ganho esperado de 40-50% em latência
 
-**📖 Leia:** [COMPARACAO_ESPERADA.md](COMPARACAO_ESPERADA.md) e [GUIA_CENARIOS_CRITICOS.md](GUIA_CENARIOS_CRITICOS.md)
+## 📚 Documentação
+
+- **[GUIA_EXECUCAO.md](GUIA_EXECUCAO.md)** - Guia rápido de execução e métricas
+- **[ANALISE_FINAL_TCC.md](ANALISE_FINAL_TCC.md)** - Análise consolidada final
+- **[CB_PERFIS_CONFIGURACAO.md](CB_PERFIS_CONFIGURACAO.md)** - Perfis de configuração do CB
+- **[ESTRUTURA_PROJETO.md](ESTRUTURA_PROJETO.md)** - Estrutura completa do projeto
+- **[docs/](docs/)** - Documentação acadêmica do TCC
 
 ---
 
