@@ -56,3 +56,10 @@ __pycache__/
 # Temp files
 *.tmp
 *.temp
+
+# Adições sugeridas para evitar o versionamento de grandes gerados por testes e ferramentas
+# Ignorar pasta de resultados do k6 (JSON grandes)
+k6/results/
+
+# Ignorar o JAR gerado dos diagramas (arquivo grande)
+docs/diagramas/plantuml.jar

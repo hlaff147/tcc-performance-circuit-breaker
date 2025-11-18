@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import exec from 'k6/execution';
 
 /**
  * CENÁRIO 3: RAJADAS INTERMITENTES
@@ -44,20 +45,20 @@ export const options = {
   ],
 };
 
+const BURSTS = [
+  { start: 180, end: 240 },
+  { start: 360, end: 420 },
+  { start: 540, end: 600 },
+];
+
+function elapsedSeconds() {
+  return exec.instance.currentTestRunDuration / 1000;
+}
+
 export default function () {
-  const now = new Date();
-  const minutes = now.getMinutes();
-  const seconds = now.getSeconds();
-  const totalSeconds = (minutes * 60) + seconds;
-  
-  // Determina se estamos em uma "rajada de falha" ou período normal
-  // Rajadas: 3-4min, 6-7min, 9-10min
-  const inBurst = (
-    (totalSeconds >= 180 && totalSeconds < 240) ||   // Rajada 1
-    (totalSeconds >= 360 && totalSeconds < 420) ||   // Rajada 2
-    (totalSeconds >= 540 && totalSeconds < 600)      // Rajada 3
-  );
-  
+  const elapsed = elapsedSeconds();
+  const inBurst = BURSTS.some(({ start, end }) => elapsed >= start && elapsed < end);
+
   let modo;
   
   if (inBurst) {
@@ -91,6 +92,7 @@ export default function () {
   
   check(res, {
     'resposta valida': (r) => [200, 201, 202, 500, 503].includes(r.status),
+    'status is 2xx or 202 fallback': (r) => r.status === 200 || r.status === 201 || r.status === 202,
   });
   
   sleep(1);

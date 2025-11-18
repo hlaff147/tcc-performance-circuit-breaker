@@ -10,7 +10,8 @@
 #   - catastrofe: Falha catastrófica (API 100% fora)
 #   - degradacao: Degradação gradual
 #   - rajadas: Rajadas intermitentes
-#   - all: Todos os cenários (demora ~45min)
+#   - indisponibilidade: API fica 75% do tempo off
+#   - all: Todos os cenários (demora ~60min)
 ###############################################################################
 
 set -e
@@ -72,6 +73,7 @@ if [ "$SCENARIO" = "all" ]; then
     open analysis_results/scenarios/catastrofe_report.html
     open analysis_results/scenarios/degradacao_report.html
     open analysis_results/scenarios/rajadas_report.html
+    open analysis_results/scenarios/indisponibilidade_report.html
 else
     open "analysis_results/scenarios/${SCENARIO}_report.html"
 fi

@@ -27,6 +27,13 @@ PLOTS_DIR = os.path.join(OUTPUT_DIR, "plots")
 CSV_DIR = os.path.join(OUTPUT_DIR, "csv")
 
 PALETTE = {"V1": "#d62728", "V2": "#2ca02c"}
+
+ESTIMATED_DURATIONS = {
+    "catastrofe": 13 * 60,
+    "degradacao": 13 * 60,
+    "rajadas": 11 * 60,
+    "indisponibilidade": 9 * 60,
+}
 sns.set_style("whitegrid")
 
 class ScenarioAnalyzer:
@@ -43,11 +50,15 @@ class ScenarioAnalyzer:
         os.makedirs(self.csv_dir, exist_ok=True)
         
         self.data = {}
+        self.summary = {}
+        self.test_duration_seconds = None
         
     def load_data(self):
         """Carrega dados do cenário"""
         print(f"\n📂 Carregando dados do cenário: {self.scenario_name}")
         
+        self.data = {}
+        self.summary = {}
         for version in ["V1", "V2"]:
             file_path = os.path.join(self.results_dir, f"{self.scenario_name}_{version}.json")
             
@@ -68,7 +79,39 @@ class ScenarioAnalyzer:
                     print(f"  ⚠️  {version}: Nenhum ponto encontrado")
             else:
                 print(f"  ❌ {version}: Arquivo não encontrado")
+
+            summary_path = os.path.join(self.results_dir, f"{self.scenario_name}_{version}_summary.json")
+            if os.path.exists(summary_path):
+                with open(summary_path, 'r') as f:
+                    try:
+                        self.summary[version] = json.load(f)
+                    except json.JSONDecodeError:
+                        print(f"  ⚠️  {version}: Não foi possível interpretar o summary JSON")
+            else:
+                print(f"  ⚠️  {version}: Summary não encontrado")
+
+        self.test_duration_seconds = self._infer_test_duration()
     
+    def _infer_test_duration(self):
+        durations = []
+        for summary in self.summary.values():
+            metrics = summary.get('metrics', {})
+            iterations = metrics.get('iterations', {})
+            http_reqs = metrics.get('http_reqs', {})
+            duration = None
+            for metric in (iterations, http_reqs):
+                count = metric.get('count')
+                rate = metric.get('rate')
+                if count and rate:
+                    duration = count / rate if rate else None
+                    if duration:
+                        break
+            if duration:
+                durations.append(duration)
+        if durations:
+            return sum(durations) / len(durations)
+        return ESTIMATED_DURATIONS.get(self.scenario_name)
+
     def analyze_response_times(self):
         """Analisa tempos de resposta com foco em períodos de falha"""
         print(f"\n📊 Analisando tempos de resposta...")
@@ -133,15 +176,24 @@ class ScenarioAnalyzer:
                 'Version': version,
                 'Total Requests': total,
                 'Success (200)': success,
+                'Fallback (202)': fallback,
                 'API Failure (500)': api_fail,
                 'CB Open (503)': cb_open,
-                'Fallback (202)': fallback,
                 'Success Rate (%)': (success / total) * 100 if total > 0 else 0,
+                'Fallback Rate (%)': (fallback / total) * 100 if total > 0 else 0,
                 'Total Success Rate (%)': (total_success / total) * 100 if total > 0 else 0,
                 'API Failure Rate (%)': (api_fail / total) * 100 if total > 0 else 0,
                 'CB Protection Rate (%)': (cb_open / total) * 100 if total > 0 else 0,
-                'Fallback Rate (%)': (fallback / total) * 100 if total > 0 else 0,
             })
+            
+            # Print detalhado dos status codes
+            print(f"\n  {version}:")
+            print(f"    Total Requests: {total:.0f}")
+            print(f"    Success (200): {success:.0f} ({(success/total)*100:.1f}%)")
+            print(f"    Fallback (202): {fallback:.0f} ({(fallback/total)*100:.1f}%)")
+            print(f"    Total Success: {total_success:.0f} ({(total_success/total)*100:.1f}%)")
+            print(f"    API Failure (500): {api_fail:.0f} ({(api_fail/total)*100:.1f}%)")
+            print(f"    CB Open (503): {cb_open:.0f} ({(cb_open/total)*100:.1f}%)")
         
         self.status_df = pd.DataFrame(results)
         return self.status_df
@@ -174,15 +226,22 @@ class ScenarioAnalyzer:
         protected_requests = v2_status['CB Open (503)']
         
         # NOVA MÉTRICA: Redução de falhas reais (500)
-        v1_failure_rate = v2_status['API Failure Rate (%)']
+        v1_failure_rate = v1_status['API Failure Rate (%)']
         v2_failure_rate = v2_status['API Failure Rate (%)']
-        failure_reduction = ((v1_status['API Failure Rate (%)'] - v2_status['API Failure Rate (%)']) / 
-                            v1_status['API Failure Rate (%)']) * 100 if v1_status['API Failure Rate (%)'] > 0 else 0
+        failure_reduction = ((v1_failure_rate - v2_failure_rate) / v1_failure_rate) * 100 if v1_failure_rate > 0 else 0
         
         # Estimativa de tempo economizado
         # Assume que CB responde em ~50ms vs timeout de ~2500ms
         time_saved_per_req = 2500 - 50  # ms
         total_time_saved = (protected_requests * time_saved_per_req) / 1000  # segundos
+
+        duration_seconds = self.test_duration_seconds or 0
+        v1_availability = v1_status['Total Success Rate (%)']
+        v2_availability = v2_status['Total Success Rate (%)']
+        v1_effective_downtime = duration_seconds * (1 - v1_availability / 100) if duration_seconds else None
+        v2_effective_downtime = duration_seconds * (1 - v2_availability / 100) if duration_seconds else None
+        v1_hard_downtime = duration_seconds * (v1_failure_rate / 100) if duration_seconds else None
+        v2_hard_downtime = duration_seconds * (v2_failure_rate / 100) if duration_seconds else None
         
         benefits = {
             'Scenario': self.scenario_name,
@@ -196,16 +255,25 @@ class ScenarioAnalyzer:
             'V2 Failure Rate (%)': v2_status['API Failure Rate (%)'],
             'Fast Response Increase (%)': v2_resp['Fast Requests (%)'] - v1_resp['Fast Requests (%)'],
             'Slow Response Decrease (%)': v1_resp['Slow Requests (%)'] - v2_resp['Slow Requests (%)'],
+            'Test Duration (s)': duration_seconds,
+            'V1 Availability (%)': v1_availability,
+            'V2 Availability (%)': v2_availability,
+            'V1 Downtime (s)': v1_effective_downtime,
+            'V2 Downtime (s)': v2_effective_downtime,
+            'V1 Hard Downtime (s)': v1_hard_downtime,
+            'V2 Hard Downtime (s)': v2_hard_downtime,
         }
         
         self.benefits = pd.DataFrame([benefits])
         
-        print(f"\n  📈 Redução de falhas: {failure_reduction:.2f}%")
+        print(f"  📈 Redução de falhas: {failure_reduction:.2f}%")
         print(f"  📈 Melhoria no tempo médio: {response_improvement:.2f}%")
         print(f"  📈 Melhoria no P95: {p95_improvement:.2f}%")
         print(f"  📈 Melhoria no P99: {p99_improvement:.2f}%")
         print(f"  🛡️  Requests protegidas: {protected_requests:.0f}")
         print(f"  ⏱️  Tempo economizado: {total_time_saved:.2f}s")
+        if duration_seconds:
+            print(f"  📉 Downtime V1: {v1_effective_downtime/60:.2f} min | V2: {v2_effective_downtime/60:.2f} min")
         
         return benefits
     
@@ -253,11 +321,11 @@ class ScenarioAnalyzer:
         plt.savefig(os.path.join(self.plots_dir, 'response_comparison.png'), dpi=150)
         plt.close()
         
-        # 2. Status codes
+        # 2. Status codes - ATUALIZADO para incluir Fallback
         fig, ax = plt.subplots(figsize=(12, 6))
         
         status_data = self.status_df.set_index('Version')[
-            ['Success Rate (%)', 'API Failure Rate (%)', 'CB Protection Rate (%)']
+            ['Success Rate (%)', 'Fallback Rate (%)', 'API Failure Rate (%)', 'CB Protection Rate (%)']
         ]
         
         status_data.plot(
@@ -266,6 +334,7 @@ class ScenarioAnalyzer:
             ax=ax,
             color={
                 'Success Rate (%)': '#2ca02c',
+                'Fallback Rate (%)': '#87CEEB',  # Azul claro para fallback
                 'API Failure Rate (%)': '#d62728',
                 'CB Protection Rate (%)': '#ff7f0e',
             }
@@ -278,6 +347,44 @@ class ScenarioAnalyzer:
         
         plt.tight_layout()
         plt.savefig(os.path.join(self.plots_dir, 'status_distribution.png'), dpi=150)
+        plt.close()
+        
+        # 3. Novo gráfico: Comparação detalhada de status codes
+        fig, ax = plt.subplots(figsize=(14, 7))
+        
+        # Preparar dados para barras agrupadas
+        versions = self.status_df['Version'].tolist()
+        x = np.arange(len(versions))
+        width = 0.18
+        
+        success_200 = self.status_df['Success (200)'].tolist()
+        fallback_202 = self.status_df['Fallback (202)'].tolist()
+        fail_500 = self.status_df['API Failure (500)'].tolist()
+        cb_503 = self.status_df['CB Open (503)'].tolist()
+        
+        ax.bar(x - 1.5*width, success_200, width, label='Success (200)', color='#2ca02c')
+        ax.bar(x - 0.5*width, fallback_202, width, label='Fallback (202)', color='#87CEEB')
+        ax.bar(x + 0.5*width, fail_500, width, label='API Failure (500)', color='#d62728')
+        ax.bar(x + 1.5*width, cb_503, width, label='CB Open (503)', color='#ff7f0e')
+        
+        ax.set_ylabel('Número de Requisições')
+        ax.set_title(f'Comparação Detalhada de Status Codes - {self.scenario_name.upper()}')
+        ax.set_xticks(x)
+        ax.set_xticklabels(versions)
+        ax.legend()
+        ax.grid(True, alpha=0.3, axis='y')
+        
+        # Adicionar valores nas barras
+        for i, v in enumerate(versions):
+            offset = -1.5*width
+            for count, color in [(success_200[i], '#2ca02c'), (fallback_202[i], '#87CEEB'), 
+                                 (fail_500[i], '#d62728'), (cb_503[i], '#ff7f0e')]:
+                if count > 0:
+                    ax.text(i + offset, count, f'{int(count)}', ha='center', va='bottom', fontsize=8)
+                offset += width
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.plots_dir, 'status_codes_detailed.png'), dpi=150)
         plt.close()
         
         print(f"  ✅ Gráficos salvos em {self.plots_dir}")
@@ -411,6 +518,13 @@ class ScenarioAnalyzer:
                     <p><strong>Objetivo do CB:</strong> Abrir/fechar rapidamente em resposta às rajadas, protegendo em cada crise.</p>
                     <p><strong>Interpretação correta:</strong> CB bloqueou {{ "%.1f"|format(benefits.get('Protected Requests', 0) / status_df[status_df['Version'] == 'V2']['Total Requests'].values[0] * 100) }}% das requests nas rajadas para <strong>evitar timeouts de 3s</strong>. V2 reduziu falhas reais em {{ "%.1f"|format(benefits.get('Failure Reduction (%)', 0)) }}%.</p>
                 </div>
+                {% elif scenario_name == 'indisponibilidade' %}
+                <div class="warning-box">
+                    <h4>📌 Contexto do Cenário: Indisponibilidade Extrema</h4>
+                    <p><strong>Situação:</strong> A API fica OFF em ~75% do tempo total, com uma janela contínua de manutenção somada a rajadas adicionais.</p>
+                    <p><strong>Objetivo do CB:</strong> Manter o serviço responsivo via fallback enquanto a dependência principal está indisponível.</p>
+                    <p><strong>Métrica chave:</strong> Disponibilidade efetiva (200 + 202) e redução de downtime percebido pelos clientes.</p>
+                </div>
                 {% endif %}
                 
                 {% if benefits %}
@@ -442,12 +556,53 @@ class ScenarioAnalyzer:
                     </ul>
                 </div>
                 {% endif %}
+                {% if benefits %}
+                <h2>🕒 Disponibilidade x Downtime</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Versão</th>
+                            <th>Disponibilidade Efetiva (200 + 202)</th>
+                            <th>Fallback (%)</th>
+                            <th>Downtime Total (min)</th>
+                            <th>Downtime de Falha Real (min)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>V1</td>
+                            <td>{{ "%.1f"|format(benefits['V1 Availability (%)']) }}%</td>
+                            <td>{{ "%.1f"|format(status_df[status_df['Version'] == 'V1']['Fallback Rate (%)'].values[0]) }}%</td>
+                            <td>{{ "%.2f"|format((benefits['V1 Downtime (s)'] or 0) / 60) }}</td>
+                            <td>{{ "%.2f"|format((benefits['V1 Hard Downtime (s)'] or 0) / 60) }}</td>
+                        </tr>
+                        <tr>
+                            <td>V2</td>
+                            <td>{{ "%.1f"|format(benefits['V2 Availability (%)']) }}%</td>
+                            <td>{{ "%.1f"|format(status_df[status_df['Version'] == 'V2']['Fallback Rate (%)'].values[0]) }}%</td>
+                            <td>{{ "%.2f"|format((benefits['V2 Downtime (s)'] or 0) / 60) }}</td>
+                            <td>{{ "%.2f"|format((benefits['V2 Hard Downtime (s)'] or 0) / 60) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                {% endif %}
                 
                 <h2>📊 Tempos de Resposta</h2>
                 {{ response_table }}
                 
                 <h2>🔍 Distribuição de Status</h2>
                 {{ status_table }}
+                
+                <div class="info-box">
+                    <h4>📊 Interpretação dos Status Codes</h4>
+                    <ul>
+                        <li><strong>200/201:</strong> Sucesso direto da API externa</li>
+                        <li><strong>202 (Fallback):</strong> Circuit Breaker retornou resposta alternativa (considerado sucesso)</li>
+                        <li><strong>500:</strong> Falha real da API externa (erro propagado)</li>
+                        <li><strong>503:</strong> Circuit Breaker ABERTO - proteção ativa (evita timeouts de 3s)</li>
+                    </ul>
+                    <p><strong>Taxa de Sucesso Total = Success (200) + Fallback (202)</strong></p>
+                </div>
                 
                 {% if scenario_name in ['degradacao', 'rajadas'] %}
                 <div class="success-box">
@@ -461,6 +616,7 @@ class ScenarioAnalyzer:
                 <h2>📈 Gráficos Comparativos</h2>
                 <img src="plots/{{ scenario_name }}/response_comparison.png" alt="Comparação de Latência">
                 <img src="plots/{{ scenario_name }}/status_distribution.png" alt="Distribuição de Status">
+                <img src="plots/{{ scenario_name }}/status_codes_detailed.png" alt="Status Codes Detalhados">
             </div>
         </body>
         </html>
@@ -514,13 +670,26 @@ class ScenarioAnalyzer:
         print(f"\n✅ Análise de {self.scenario_name} concluída!")
 
 
+def discover_scenarios(directory):
+    names = set()
+    if not os.path.exists(directory):
+        return []
+    for filename in os.listdir(directory):
+        if filename.endswith('_V1.json'):
+            names.add(filename.replace('_V1.json', ''))
+    return sorted(names)
+
+
 if __name__ == "__main__":
     import sys
     
-    scenarios = ["catastrofe", "degradacao", "rajadas"]
+    cli_args = sys.argv[1:]
+    available = discover_scenarios(RESULTS_DIR)
     
-    if len(sys.argv) > 1:
-        scenarios = [sys.argv[1]]
+    if not cli_args or cli_args == ['all']:
+        scenarios = available or ["catastrofe", "degradacao", "rajadas", "indisponibilidade"]
+    else:
+        scenarios = cli_args
     
     print("\n" + "="*60)
     print("  ANALISADOR DE CENÁRIOS CRÍTICOS - CIRCUIT BREAKER")
@@ -535,7 +704,6 @@ if __name__ == "__main__":
         if analyzer.benefits is not None:
             all_benefits.append(analyzer.benefits)
     
-    # Relatório consolidado
     if all_benefits:
         print("\n" + "="*60)
         print("  RESUMO CONSOLIDADO DE TODOS OS CENÁRIOS")

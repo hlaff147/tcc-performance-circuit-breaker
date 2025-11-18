@@ -1,11 +1,11 @@
 #!/bin/bash
 
 ###############################################################################
-# Script para executar os 3 cenários de teste que demonstram as vantagens
+# Script para executar os cenários de teste que demonstram as vantagens
 # do Circuit Breaker em situações críticas.
 #
 # Uso:
-#   ./run_scenario_tests.sh [all|catastrofe|degradacao|rajadas]
+#   ./run_scenario_tests.sh [all|catastrofe|degradacao|rajadas|indisponibilidade]
 #
 # Cada cenário roda para V1 e V2, salvando resultados separados.
 ###############################################################################
@@ -120,6 +120,13 @@ run_rajadas() {
         "Cenário 3: RAJADAS INTERMITENTES (Falhas em ondas)"
 }
 
+run_indisponibilidade() {
+    run_scenario \
+        "indisponibilidade" \
+        "cenario-indisponibilidade-extrema.js" \
+        "Cenário 4: INDISPONIBILIDADE EXTREMA (75% OFF)"
+}
+
 # Main
 echo -e "${BLUE}"
 cat << "EOF"
@@ -144,6 +151,9 @@ case $SCENARIO in
     rajadas)
         run_rajadas
         ;;
+    indisponibilidade)
+        run_indisponibilidade
+        ;;
     all)
         echo -e "${YELLOW}🚀 Executando TODOS os cenários...${NC}\n"
         run_catastrofe
@@ -153,6 +163,9 @@ case $SCENARIO in
         echo -e "\n⏸️  Pausa de 30s antes do próximo cenário...\n"
         sleep 30
         run_rajadas
+        echo -e "\n⏸️  Pausa de 30s antes do próximo cenário...\n"
+        sleep 30
+        run_indisponibilidade
         ;;
     *)
         echo -e "${RED}❌ Cenário inválido: $SCENARIO${NC}"

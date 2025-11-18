@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import exec from 'k6/execution';
 
 /**
  * CENÁRIO 2: DEGRADAÇÃO GRADUAL
@@ -38,30 +39,37 @@ export const options = {
   ],
 };
 
+const PHASES = {
+  degradeStart: 120,
+  criticalStart: 300,
+  recoveryStart: 480,
+  testEnd: 720,
+};
+
+function elapsedSeconds() {
+  return exec.instance.currentTestRunDuration / 1000;
+}
+
 export default function () {
-  const now = new Date();
-  const minutes = now.getMinutes();
-  const seconds = now.getSeconds();
-  const totalSeconds = (minutes * 60) + seconds;
-  
-  // Degradação gradual ao longo do tempo
-  let failureRate = 0.05;  // Começa com 5% falha
-  let latencyRate = 0.15;  // 15% latência
-  
-  if (totalSeconds > 120 && totalSeconds <= 300) {
-    // Fase 2: Degradação inicial (2-5min)
-    failureRate = 0.20;   // 20% falhas
-    latencyRate = 0.30;   // 30% latência
-  } else if (totalSeconds > 300 && totalSeconds <= 480) {
-    // Fase 3: Degradação crítica (5-8min)
-    failureRate = 0.50;   // 50% falhas
-    latencyRate = 0.40;   // 40% latência
-  } else if (totalSeconds > 480 && totalSeconds <= 720) {
-    // Fase 4: Recuperação gradual (8-12min)
-    failureRate = 0.15;   // 15% falhas
-    latencyRate = 0.25;   // 25% latência
+  const elapsed = elapsedSeconds();
+  let failureRate = 0.05;
+  let latencyRate = 0.15;
+  let fase = 'estavel';
+
+  if (elapsed > PHASES.degradeStart && elapsed <= PHASES.criticalStart) {
+    failureRate = 0.20;
+    latencyRate = 0.30;
+    fase = 'degradacao';
+  } else if (elapsed > PHASES.criticalStart && elapsed <= PHASES.recoveryStart) {
+    failureRate = 0.50;
+    latencyRate = 0.40;
+    fase = 'critico';
+  } else if (elapsed > PHASES.recoveryStart && elapsed <= PHASES.testEnd) {
+    failureRate = 0.15;
+    latencyRate = 0.25;
+    fase = 'recuperacao';
   }
-  
+
   const rand = Math.random();
   let modo;
   
@@ -83,13 +91,14 @@ export default function () {
   
   const params = {
     headers: { 'Content-Type': 'application/json' },
-    tags: { modo },
+    tags: { modo, fase },
   };
   
   const res = http.post(url, payload, params);
   
   check(res, {
     'resposta valida': (r) => [200, 201, 202, 500, 503].includes(r.status),
+    'status is 2xx or 202 fallback': (r) => r.status === 200 || r.status === 201 || r.status === 202,
   });
   
   sleep(1);

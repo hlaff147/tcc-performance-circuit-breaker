@@ -141,6 +141,36 @@
                 </div>
                 
                 
+                <h2>🕒 Disponibilidade x Downtime</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Versão</th>
+                            <th>Disponibilidade Efetiva (200 + 202)</th>
+                            <th>Fallback (%)</th>
+                            <th>Downtime Total (min)</th>
+                            <th>Downtime de Falha Real (min)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>V1</td>
+                            <td>94.7%</td>
+                            <td>0.0%</td>
+                            <td>0.69</td>
+                            <td>0.69</td>
+                        </tr>
+                        <tr>
+                            <td>V2</td>
+                            <td>94.9%</td>
+                            <td>0.0%</td>
+                            <td>0.66</td>
+                            <td>0.66</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                
                 <h2>📊 Tempos de Resposta</h2>
                 <table border="1" class="dataframe table">
   <thead>
@@ -186,14 +216,14 @@
       <th>Version</th>
       <th>Total Requests</th>
       <th>Success (200)</th>
+      <th>Fallback (202)</th>
       <th>API Failure (500)</th>
       <th>CB Open (503)</th>
-      <th>Fallback (202)</th>
       <th>Success Rate (%)</th>
+      <th>Fallback Rate (%)</th>
       <th>Total Success Rate (%)</th>
       <th>API Failure Rate (%)</th>
       <th>CB Protection Rate (%)</th>
-      <th>Fallback Rate (%)</th>
     </tr>
   </thead>
   <tbody>
@@ -201,30 +231,41 @@
       <td>V1</td>
       <td>67964.0</td>
       <td>64378.0</td>
+      <td>0.0</td>
       <td>3585.0</td>
       <td>0.0</td>
-      <td>0.0</td>
       <td>94.723677</td>
+      <td>0.0</td>
       <td>94.723677</td>
       <td>5.274851</td>
-      <td>0.0</td>
       <td>0.0</td>
     </tr>
     <tr>
       <td>V2</td>
       <td>68059.0</td>
       <td>64618.0</td>
+      <td>0.0</td>
       <td>3438.0</td>
       <td>0.0</td>
-      <td>0.0</td>
       <td>94.944093</td>
+      <td>0.0</td>
       <td>94.944093</td>
       <td>5.051499</td>
-      <td>0.0</td>
       <td>0.0</td>
     </tr>
   </tbody>
 </table>
+                
+                <div class="info-box">
+                    <h4>📊 Interpretação dos Status Codes</h4>
+                    <ul>
+                        <li><strong>200/201:</strong> Sucesso direto da API externa</li>
+                        <li><strong>202 (Fallback):</strong> Circuit Breaker retornou resposta alternativa (considerado sucesso)</li>
+                        <li><strong>500:</strong> Falha real da API externa (erro propagado)</li>
+                        <li><strong>503:</strong> Circuit Breaker ABERTO - proteção ativa (evita timeouts de 3s)</li>
+                    </ul>
+                    <p><strong>Taxa de Sucesso Total = Success (200) + Fallback (202)</strong></p>
+                </div>
                 
                 
                 <div class="success-box">
@@ -238,6 +279,7 @@
                 <h2>📈 Gráficos Comparativos</h2>
                 <img src="plots/degradacao/response_comparison.png" alt="Comparação de Latência">
                 <img src="plots/degradacao/status_distribution.png" alt="Distribuição de Status">
+                <img src="plots/degradacao/status_codes_detailed.png" alt="Status Codes Detalhados">
             </div>
         </body>
         </html>

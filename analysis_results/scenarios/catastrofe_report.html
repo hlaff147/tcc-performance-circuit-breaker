@@ -75,6 +75,27 @@
                     color: #e74c3c;
                     font-weight: bold;
                 }
+                .info-box {
+                    background-color: #e8f4f8;
+                    border-left: 4px solid #3498db;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 4px;
+                }
+                .warning-box {
+                    background-color: #fff3cd;
+                    border-left: 4px solid #ffc107;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 4px;
+                }
+                .success-box {
+                    background-color: #d4edda;
+                    border-left: 4px solid #28a745;
+                    padding: 15px;
+                    margin: 20px 0;
+                    border-radius: 4px;
+                }
             </style>
         </head>
         <body>
@@ -82,28 +103,72 @@
                 <h1>🎯 Análise Detalhada: CATASTROFE</h1>
                 
                 
+                <div class="info-box">
+                    <h4>📌 Contexto do Cenário: Falha Catastrófica</h4>
+                    <p><strong>Situação:</strong> API externa completamente indisponível por 5 minutos (100% de falhas).</p>
+                    <p><strong>Objetivo do CB:</strong> Detectar a indisponibilidade e evitar sobrecarga, retornando respostas rápidas.</p>
+                    <p><strong>Métrica chave:</strong> Taxa de sucesso e redução de falhas reais (500).</p>
+                </div>
+                
+                
+                
                 <div class="metric-card">
                     <h3>💎 BENEFÍCIOS DO CIRCUIT BREAKER</h3>
                     <ul>
+                        <li><strong>Redução de Falhas (500):</strong> 
+                            <span class="improvement">
+                                44.82%
+                            </span>
+                        </li>
                         <li><strong>Melhoria no tempo médio:</strong> 
-                            <span class="degradation">
-                                -26.03%
+                            <span class="improvement">
+                                60.02%
                             </span>
                         </li>
                         <li><strong>Melhoria no P95:</strong> 
-                            <span class="degradation">
-                                -0.04%
+                            <span class="improvement">
+                                0.07%
                             </span>
                         </li>
                         <li><strong>Melhoria no P99:</strong> 
-                            <span class="degradation">
-                                -0.12%
+                            <span class="improvement">
+                                0.14%
                             </span>
                         </li>
                         <li><strong>Requisições protegidas:</strong> 0</li>
                         <li><strong>Tempo total economizado:</strong> 0.00s</li>
                     </ul>
                 </div>
+                
+                
+                <h2>🕒 Disponibilidade x Downtime</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Versão</th>
+                            <th>Disponibilidade Efetiva (200 + 202)</th>
+                            <th>Fallback (%)</th>
+                            <th>Downtime Total (min)</th>
+                            <th>Downtime de Falha Real (min)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>V1</td>
+                            <td>90.0%</td>
+                            <td>0.0%</td>
+                            <td>1.30</td>
+                            <td>1.30</td>
+                        </tr>
+                        <tr>
+                            <td>V2</td>
+                            <td>94.5%</td>
+                            <td>59.0%</td>
+                            <td>0.72</td>
+                            <td>0.72</td>
+                        </tr>
+                    </tbody>
+                </table>
                 
                 
                 <h2>📊 Tempos de Resposta</h2>
@@ -123,23 +188,23 @@
   <tbody>
     <tr>
       <td>V1</td>
-      <td>474.666345</td>
-      <td>5.054709</td>
-      <td>3007.217608</td>
-      <td>3013.846890</td>
-      <td>3652.357002</td>
-      <td>84.403183</td>
-      <td>15.583554</td>
+      <td>609.875539</td>
+      <td>4.666875</td>
+      <td>3007.761243</td>
+      <td>3015.383440</td>
+      <td>3274.781418</td>
+      <td>79.865827</td>
+      <td>20.134173</td>
     </tr>
     <tr>
       <td>V2</td>
-      <td>598.204218</td>
-      <td>5.012333</td>
-      <td>3008.352060</td>
-      <td>3017.487235</td>
-      <td>3352.191084</td>
-      <td>80.269389</td>
-      <td>19.730611</td>
+      <td>243.840392</td>
+      <td>4.231896</td>
+      <td>3005.732503</td>
+      <td>3011.185665</td>
+      <td>3043.850960</td>
+      <td>92.027109</td>
+      <td>7.972891</td>
     </tr>
   </tbody>
 </table>
@@ -151,49 +216,63 @@
       <th>Version</th>
       <th>Total Requests</th>
       <th>Success (200)</th>
+      <th>Fallback (202)</th>
       <th>API Failure (500)</th>
       <th>CB Open (503)</th>
-      <th>Fallback (202)</th>
       <th>Success Rate (%)</th>
+      <th>Fallback Rate (%)</th>
       <th>Total Success Rate (%)</th>
       <th>API Failure Rate (%)</th>
       <th>CB Protection Rate (%)</th>
-      <th>Fallback Rate (%)</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>V1</td>
-      <td>52780.0</td>
-      <td>37024.0</td>
-      <td>15755.0</td>
+      <td>48445.0</td>
+      <td>43608.0</td>
       <td>0.0</td>
+      <td>4836.0</td>
       <td>0.0</td>
-      <td>70.147783</td>
-      <td>70.147783</td>
-      <td>29.850322</td>
-      <td>0.0</td>
+      <td>90.015481</td>
+      <td>0.000000</td>
+      <td>90.015481</td>
+      <td>9.982454</td>
       <td>0.0</td>
     </tr>
     <tr>
       <td>V2</td>
-      <td>48777.0</td>
-      <td>43904.0</td>
-      <td>4865.0</td>
+      <td>62562.0</td>
+      <td>22201.0</td>
+      <td>36912.0</td>
+      <td>3446.0</td>
       <td>0.0</td>
-      <td>0.0</td>
-      <td>90.009636</td>
-      <td>90.009636</td>
-      <td>9.973963</td>
-      <td>0.0</td>
+      <td>35.486397</td>
+      <td>59.000671</td>
+      <td>94.487069</td>
+      <td>5.508136</td>
       <td>0.0</td>
     </tr>
   </tbody>
 </table>
                 
+                <div class="info-box">
+                    <h4>📊 Interpretação dos Status Codes</h4>
+                    <ul>
+                        <li><strong>200/201:</strong> Sucesso direto da API externa</li>
+                        <li><strong>202 (Fallback):</strong> Circuit Breaker retornou resposta alternativa (considerado sucesso)</li>
+                        <li><strong>500:</strong> Falha real da API externa (erro propagado)</li>
+                        <li><strong>503:</strong> Circuit Breaker ABERTO - proteção ativa (evita timeouts de 3s)</li>
+                    </ul>
+                    <p><strong>Taxa de Sucesso Total = Success (200) + Fallback (202)</strong></p>
+                </div>
+                
+                
+                
                 <h2>📈 Gráficos Comparativos</h2>
                 <img src="plots/catastrofe/response_comparison.png" alt="Comparação de Latência">
                 <img src="plots/catastrofe/status_distribution.png" alt="Distribuição de Status">
+                <img src="plots/catastrofe/status_codes_detailed.png" alt="Status Codes Detalhados">
             </div>
         </body>
         </html>

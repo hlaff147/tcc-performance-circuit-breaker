@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import exec from 'k6/execution';
 
 /**
  * CENÁRIO 1: FALHA CATASTRÓFICA
@@ -42,29 +43,35 @@ export const options = {
   },
 };
 
+const TEST_SEGMENTS = {
+  catastropheStart: 240,   // 4 minutos
+  catastropheEnd: 540,     // 9 minutos
+  recoveryEnd: 720,        // 12 minutos
+};
+
+function elapsedSeconds() {
+  return exec.instance.currentTestRunDuration / 1000;
+}
+
 export default function () {
-  const now = new Date();
-  const minutes = now.getMinutes();
-  const seconds = now.getSeconds();
-  const totalSeconds = (minutes * 60) + seconds;
-  
-  // Determina o modo baseado no estágio do teste
-  // 0-4min: Aquecimento + Normal (modo misto)
-  // 4-9min: CATÁSTROFE (100% falha)
-  // 9-12min: Recuperação (modo misto)
+  const elapsed = elapsedSeconds();
   let modo;
-  
-  if (totalSeconds >= 240 && totalSeconds < 540) {
-    // Durante a catástrofe: 100% falhas
+  let fase = 'normal';
+
+  if (elapsed >= TEST_SEGMENTS.catastropheStart && elapsed < TEST_SEGMENTS.catastropheEnd) {
     modo = 'falha';
+    fase = 'catastrofe';
+  } else if (elapsed >= TEST_SEGMENTS.catastropheEnd && elapsed < TEST_SEGMENTS.recoveryEnd) {
+    const rand = Math.random();
+    modo = rand < 0.6 ? 'normal' : rand < 0.85 ? 'latencia' : 'falha';
+    fase = 'recuperacao';
   } else {
-    // Fora da catástrofe: distribuição normal
     const rand = Math.random();
     if (rand < 0.7) modo = 'normal';
     else if (rand < 0.9) modo = 'latencia';
     else modo = 'falha';
   }
-  
+
   const url = `${BASE_URL}/pagar?modo=${modo}`;
   
   const payload = JSON.stringify({
@@ -77,7 +84,7 @@ export default function () {
     headers: { 'Content-Type': 'application/json' },
     tags: { 
       modo,
-      fase: totalSeconds >= 240 && totalSeconds < 540 ? 'catastrofe' : 'normal'
+      fase
     },
   };
   
@@ -85,6 +92,7 @@ export default function () {
   
   check(res, {
     'resposta valida': (r) => [200, 201, 202, 500, 503].includes(r.status),
+    'status is 2xx or 202 fallback': (r) => r.status === 200 || r.status === 201 || r.status === 202,
   });
   
   sleep(1);
