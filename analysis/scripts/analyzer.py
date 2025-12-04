@@ -1,9 +1,12 @@
 import os
 import json
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from jinja2 import Template
+from scipy import stats
+from datetime import datetime
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -13,6 +16,8 @@ RESULTS_DIR = "k6/results"
 OUTPUT_DIR = "analysis_results"
 PLOTS_DIR = os.path.join(OUTPUT_DIR, "plots")
 CSV_DIR = os.path.join(OUTPUT_DIR, "csv")
+LATEX_DIR = os.path.join(OUTPUT_DIR, "latex")
+MARKDOWN_DIR = os.path.join(OUTPUT_DIR, "markdown")
 
 # --- Cores e Estilos para Gráficos ---
 PALETTE = {"V1": "#d62728", "V2": "#2ca02c"}
@@ -27,11 +32,16 @@ class K6Analyzer:
         self.output_dir = output_dir
         self.plots_dir = os.path.join(output_dir, "plots")
         self.csv_dir = os.path.join(output_dir, "csv")
+        self.latex_dir = os.path.join(output_dir, "latex")
+        self.markdown_dir = os.path.join(output_dir, "markdown")
         self.data = {}
+        self.response_times = {}  # Para análise estatística
 
         # Cria diretórios de saída se não existirem
         os.makedirs(self.plots_dir, exist_ok=True)
         os.makedirs(self.csv_dir, exist_ok=True)
+        os.makedirs(self.latex_dir, exist_ok=True)
+        os.makedirs(self.markdown_dir, exist_ok=True)
 
     def load_data(self):
         """
@@ -228,9 +238,453 @@ class K6Analyzer:
             f.write(html_content)
         print(f"Relatório HTML gerado em: {report_path}")
 
-    def run_analysis(self):
+    def plot_timeline(self, window_size='5s'):
+        """
+        Gera gráficos de série temporal para análise do comportamento ao longo do teste.
+        Permite identificar padrões de degradação, recuperação e transições do CB.
+        
+        Args:
+            window_size: Janela de agregação para suavização (ex: '5s', '10s', '30s')
+        """
+        print(f"Gerando análise de séries temporais (janela: {window_size})...")
+        
+        for version, df in self.data.items():
+            if 'time' not in df.columns:
+                print(f"Aviso: Coluna 'time' não encontrada para {version}. Pulando série temporal.")
+                continue
+            
+            # Converte timestamp para datetime
+            df_timeline = df.copy()
+            df_timeline['timestamp'] = pd.to_datetime(df_timeline['time'])
+            df_timeline = df_timeline.set_index('timestamp')
+            
+            # Filtra apenas métricas de duração de requisição
+            req_duration = df_timeline[df_timeline['metric'] == 'http_req_duration']
+            
+            if req_duration.empty:
+                print(f"Aviso: Nenhuma métrica de duração encontrada para {version}.")
+                continue
+            
+            # Armazena para análise estatística
+            self.response_times[version] = req_duration['value'].values
+            
+            # Agrega por janela de tempo
+            resampled = req_duration['value'].resample(window_size).agg(['mean', 'median', 'std', 'count'])
+            resampled.columns = ['Média', 'Mediana', 'Desvio Padrão', 'Contagem']
+            
+            # Calcula percentis móveis
+            resampled['P95'] = req_duration['value'].resample(window_size).quantile(0.95)
+            resampled['P99'] = req_duration['value'].resample(window_size).quantile(0.99)
+            
+            # Plot 1: Tempo de resposta ao longo do tempo
+            fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
+            
+            # Subplot 1: Média e Percentis
+            ax1 = axes[0]
+            ax1.plot(resampled.index, resampled['Média'], label='Média', color=PALETTE[version], linewidth=2)
+            ax1.fill_between(resampled.index, 
+                            resampled['Média'] - resampled['Desvio Padrão'],
+                            resampled['Média'] + resampled['Desvio Padrão'],
+                            alpha=0.3, color=PALETTE[version], label='±1 Desvio Padrão')
+            ax1.plot(resampled.index, resampled['P95'], '--', label='P95', color='orange', linewidth=1.5)
+            ax1.plot(resampled.index, resampled['P99'], ':', label='P99', color='red', linewidth=1.5)
+            ax1.set_ylabel('Tempo de Resposta (ms)')
+            ax1.set_title(f'{version} - Tempo de Resposta ao Longo do Teste')
+            ax1.legend(loc='upper right')
+            ax1.grid(True, alpha=0.3)
+            
+            # Subplot 2: Throughput (requisições por janela)
+            ax2 = axes[1]
+            ax2.bar(resampled.index, resampled['Contagem'], width=pd.Timedelta(window_size)*0.8,
+                   color=PALETTE[version], alpha=0.7, label='Requisições')
+            ax2.set_ylabel('Requisições por Janela')
+            ax2.set_title(f'{version} - Throughput')
+            ax2.grid(True, alpha=0.3)
+            
+            # Subplot 3: Taxa de Sucesso por janela (se disponível)
+            ax3 = axes[2]
+            http_reqs = df_timeline[df_timeline['metric'] == 'http_reqs'].copy()
+            if not http_reqs.empty and 'tags' in http_reqs.columns:
+                http_reqs['status'] = http_reqs['tags'].apply(
+                    lambda x: str(x.get('status')) if isinstance(x, dict) and x.get('status') else None
+                )
+                success_rate = http_reqs.groupby([pd.Grouper(freq=window_size), 'status'])['value'].sum().unstack(fill_value=0)
+                
+                if '200' in success_rate.columns:
+                    total_per_window = success_rate.sum(axis=1)
+                    success_pct = (success_rate.get('200', 0) / total_per_window * 100).fillna(0)
+                    ax3.plot(success_pct.index, success_pct.values, color=PALETTE[version], linewidth=2)
+                    ax3.axhline(y=95, color='green', linestyle='--', alpha=0.5, label='SLA 95%')
+                    ax3.axhline(y=99, color='blue', linestyle=':', alpha=0.5, label='SLA 99%')
+                    ax3.fill_between(success_pct.index, success_pct.values, alpha=0.3, color=PALETTE[version])
+            
+            ax3.set_ylabel('Taxa de Sucesso (%)')
+            ax3.set_xlabel('Tempo')
+            ax3.set_title(f'{version} - Taxa de Sucesso')
+            ax3.set_ylim(0, 105)
+            ax3.legend(loc='lower right')
+            ax3.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(self.plots_dir, f"timeline_{version}.png"), dpi=150)
+            plt.close()
+            
+            # Salva dados da série temporal
+            resampled.to_csv(os.path.join(self.csv_dir, f"timeline_{version}.csv"))
+        
+        # Gera plot comparativo V1 vs V2
+        self._plot_comparative_timeline(window_size)
+        
+        print("Análise de séries temporais concluída.")
+
+    def _plot_comparative_timeline(self, window_size='5s'):
+        """
+        Gera gráfico comparativo de V1 vs V2 ao longo do tempo.
+        """
+        fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+        
+        for version, df in self.data.items():
+            if 'time' not in df.columns:
+                continue
+            
+            df_timeline = df.copy()
+            df_timeline['timestamp'] = pd.to_datetime(df_timeline['time'])
+            df_timeline = df_timeline.set_index('timestamp')
+            
+            req_duration = df_timeline[df_timeline['metric'] == 'http_req_duration']
+            if req_duration.empty:
+                continue
+            
+            resampled = req_duration['value'].resample(window_size).agg(['mean', 'median'])
+            
+            # Plot média
+            axes[0].plot(resampled.index, resampled['mean'], label=f'{version} - Média', 
+                        color=PALETTE[version], linewidth=2)
+            axes[1].plot(resampled.index, resampled['median'], label=f'{version} - Mediana', 
+                        color=PALETTE[version], linewidth=2)
+        
+        axes[0].set_ylabel('Tempo Médio (ms)')
+        axes[0].set_title('Comparação V1 vs V2 - Tempo de Resposta Médio')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        
+        axes[1].set_ylabel('Tempo Mediano (ms)')
+        axes[1].set_xlabel('Tempo')
+        axes[1].set_title('Comparação V1 vs V2 - Tempo de Resposta Mediano')
+        axes[1].legend()
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.plots_dir, "timeline_comparison.png"), dpi=150)
+        plt.close()
+
+    def statistical_analysis(self):
+        """
+        Realiza análise estatística robusta incluindo:
+        - Teste de Mann-Whitney U (diferença significativa entre V1 e V2)
+        - Teste de Kolmogorov-Smirnov (diferença nas distribuições)
+        - Effect Size (Cliff's Delta)
+        - Intervalos de confiança bootstrap
+        """
+        print("Realizando análise estatística robusta...")
+        
+        # Garante que temos os dados de tempo de resposta
+        if not self.response_times:
+            for version, df in self.data.items():
+                if 'time' in df.columns:
+                    req_duration = df[df['metric'] == 'http_req_duration']
+                    self.response_times[version] = req_duration['value'].values
+        
+        if 'V1' not in self.response_times or 'V2' not in self.response_times:
+            print("Aviso: Dados insuficientes para análise estatística comparativa.")
+            return
+        
+        v1_times = self.response_times['V1']
+        v2_times = self.response_times['V2']
+        
+        # Teste de Mann-Whitney U (não paramétrico)
+        statistic_mw, p_value_mw = stats.mannwhitneyu(v1_times, v2_times, alternative='two-sided')
+        
+        # Teste de Kolmogorov-Smirnov
+        statistic_ks, p_value_ks = stats.ks_2samp(v1_times, v2_times)
+        
+        # Effect Size: Cliff's Delta
+        cliffs_delta = self._cliffs_delta(v1_times, v2_times)
+        
+        # Bootstrap para intervalo de confiança da diferença de médias
+        ci_low, ci_high = self._bootstrap_ci(v1_times, v2_times, n_bootstrap=10000)
+        
+        # Estatísticas descritivas
+        stats_results = {
+            'Métrica': [
+                'N (V1)', 'N (V2)',
+                'Média (V1)', 'Média (V2)',
+                'Mediana (V1)', 'Mediana (V2)',
+                'Desvio Padrão (V1)', 'Desvio Padrão (V2)',
+                'P95 (V1)', 'P95 (V2)',
+                'P99 (V1)', 'P99 (V2)',
+                'Mann-Whitney U', 'p-valor (MW)',
+                'Kolmogorov-Smirnov', 'p-valor (KS)',
+                "Cliff's Delta", 'Interpretação Effect Size',
+                'IC 95% Diferença (baixo)', 'IC 95% Diferença (alto)',
+                'Diferença Significativa (α=0.05)'
+            ],
+            'Valor': [
+                len(v1_times), len(v2_times),
+                f'{np.mean(v1_times):.2f} ms', f'{np.mean(v2_times):.2f} ms',
+                f'{np.median(v1_times):.2f} ms', f'{np.median(v2_times):.2f} ms',
+                f'{np.std(v1_times):.2f} ms', f'{np.std(v2_times):.2f} ms',
+                f'{np.percentile(v1_times, 95):.2f} ms', f'{np.percentile(v2_times, 95):.2f} ms',
+                f'{np.percentile(v1_times, 99):.2f} ms', f'{np.percentile(v2_times, 99):.2f} ms',
+                f'{statistic_mw:.2f}', f'{p_value_mw:.2e}',
+                f'{statistic_ks:.4f}', f'{p_value_ks:.2e}',
+                f'{cliffs_delta:.4f}', self._interpret_cliffs_delta(cliffs_delta),
+                f'{ci_low:.2f} ms', f'{ci_high:.2f} ms',
+                'Sim' if p_value_mw < 0.05 else 'Não'
+            ]
+        }
+        
+        self.stats_df = pd.DataFrame(stats_results)
+        self.stats_df.to_csv(os.path.join(self.csv_dir, "statistical_analysis.csv"), index=False)
+        
+        # Gera visualização das distribuições
+        self._plot_distributions(v1_times, v2_times)
+        
+        print(f"\n=== Resultados da Análise Estatística ===")
+        print(f"Mann-Whitney U: {statistic_mw:.2f}, p-valor: {p_value_mw:.2e}")
+        print(f"Cliff's Delta: {cliffs_delta:.4f} ({self._interpret_cliffs_delta(cliffs_delta)})")
+        print(f"IC 95% da diferença de médias: [{ci_low:.2f}, {ci_high:.2f}] ms")
+        print(f"Diferença estatisticamente significativa: {'Sim' if p_value_mw < 0.05 else 'Não'}")
+        
+        return self.stats_df
+
+    def _cliffs_delta(self, x, y):
+        """
+        Calcula Cliff's Delta - medida de effect size não paramétrica.
+        Valores: [-1, 1], onde:
+        - |d| < 0.147: negligível
+        - |d| < 0.33: pequeno
+        - |d| < 0.474: médio
+        - |d| >= 0.474: grande
+        """
+        n_x, n_y = len(x), len(y)
+        more = np.sum([np.sum(xi > y) for xi in x])
+        less = np.sum([np.sum(xi < y) for xi in x])
+        return (more - less) / (n_x * n_y)
+
+    def _interpret_cliffs_delta(self, d):
+        """Interpreta o valor de Cliff's Delta."""
+        abs_d = abs(d)
+        if abs_d < 0.147:
+            return "Negligível"
+        elif abs_d < 0.33:
+            return "Pequeno"
+        elif abs_d < 0.474:
+            return "Médio"
+        else:
+            return "Grande"
+
+    def _bootstrap_ci(self, x, y, n_bootstrap=10000, ci=0.95):
+        """
+        Calcula intervalo de confiança bootstrap para a diferença de médias.
+        """
+        np.random.seed(42)
+        diff_means = []
+        for _ in range(n_bootstrap):
+            x_sample = np.random.choice(x, size=len(x), replace=True)
+            y_sample = np.random.choice(y, size=len(y), replace=True)
+            diff_means.append(np.mean(x_sample) - np.mean(y_sample))
+        
+        alpha = 1 - ci
+        lower = np.percentile(diff_means, alpha / 2 * 100)
+        upper = np.percentile(diff_means, (1 - alpha / 2) * 100)
+        return lower, upper
+
+    def _plot_distributions(self, v1_times, v2_times):
+        """
+        Gera visualizações das distribuições de tempo de resposta.
+        """
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        
+        # Histograma comparativo
+        ax1 = axes[0, 0]
+        ax1.hist(v1_times, bins=50, alpha=0.5, label='V1', color=PALETTE['V1'], density=True)
+        ax1.hist(v2_times, bins=50, alpha=0.5, label='V2', color=PALETTE['V2'], density=True)
+        ax1.set_xlabel('Tempo de Resposta (ms)')
+        ax1.set_ylabel('Densidade')
+        ax1.set_title('Distribuição de Tempos de Resposta')
+        ax1.legend()
+        
+        # Box plot
+        ax2 = axes[0, 1]
+        data_bp = [v1_times, v2_times]
+        bp = ax2.boxplot(data_bp, labels=['V1', 'V2'], patch_artist=True)
+        bp['boxes'][0].set_facecolor(PALETTE['V1'])
+        bp['boxes'][1].set_facecolor(PALETTE['V2'])
+        for box in bp['boxes']:
+            box.set_alpha(0.7)
+        ax2.set_ylabel('Tempo de Resposta (ms)')
+        ax2.set_title('Box Plot Comparativo')
+        
+        # Violin plot
+        ax3 = axes[1, 0]
+        parts = ax3.violinplot([v1_times, v2_times], positions=[1, 2], showmeans=True, showmedians=True)
+        for i, pc in enumerate(parts['bodies']):
+            pc.set_facecolor([PALETTE['V1'], PALETTE['V2']][i])
+            pc.set_alpha(0.7)
+        ax3.set_xticks([1, 2])
+        ax3.set_xticklabels(['V1', 'V2'])
+        ax3.set_ylabel('Tempo de Resposta (ms)')
+        ax3.set_title('Violin Plot - Distribuição Completa')
+        
+        # ECDF (Empirical Cumulative Distribution Function)
+        ax4 = axes[1, 1]
+        v1_sorted = np.sort(v1_times)
+        v2_sorted = np.sort(v2_times)
+        ax4.plot(v1_sorted, np.arange(1, len(v1_sorted)+1) / len(v1_sorted), 
+                label='V1', color=PALETTE['V1'], linewidth=2)
+        ax4.plot(v2_sorted, np.arange(1, len(v2_sorted)+1) / len(v2_sorted), 
+                label='V2', color=PALETTE['V2'], linewidth=2)
+        ax4.set_xlabel('Tempo de Resposta (ms)')
+        ax4.set_ylabel('Proporção Cumulativa')
+        ax4.set_title('ECDF - Distribuição Cumulativa Empírica')
+        ax4.legend()
+        ax4.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.plots_dir, "distributions.png"), dpi=150)
+        plt.close()
+
+    def export_latex(self):
+        """
+        Exporta tabelas e resultados para formato LaTeX para inclusão direta no TCC.
+        """
+        print("Exportando resultados para LaTeX...")
+        
+        # Tabela de resumo principal
+        if hasattr(self, 'summary_df'):
+            latex_summary = self.summary_df.to_latex(
+                index=False,
+                caption="Resumo das Métricas de Performance: V1 vs V2",
+                label="tab:metricas-performance",
+                column_format='l' + 'r' * (len(self.summary_df.columns) - 1),
+                float_format="%.2f",
+                escape=True
+            )
+            
+            with open(os.path.join(self.latex_dir, "tabela_resumo.tex"), 'w') as f:
+                f.write(latex_summary)
+        
+        # Tabela de análise estatística
+        if hasattr(self, 'stats_df'):
+            latex_stats = self.stats_df.to_latex(
+                index=False,
+                caption="Análise Estatística Comparativa entre V1 e V2",
+                label="tab:analise-estatistica",
+                column_format='lr',
+                escape=True
+            )
+            
+            with open(os.path.join(self.latex_dir, "tabela_estatistica.tex"), 'w') as f:
+                f.write(latex_stats)
+        
+        # Gera arquivo .tex com figuras
+        figures_tex = r"""
+% Figuras geradas automaticamente pelo analyzer.py
+% Inclua este arquivo no seu documento LaTeX com \input{figuras_analise.tex}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{analysis_results/plots/response_times.png}
+    \caption{Comparação de Tempo de Resposta entre V1 (sem Circuit Breaker) e V2 (com Circuit Breaker).}
+    \label{fig:response-times}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{analysis_results/plots/success_failure_rate.png}
+    \caption{Composição das Respostas: Taxa de Sucesso, Fallback e Falha para cada versão.}
+    \label{fig:success-failure-rate}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{analysis_results/plots/timeline_comparison.png}
+    \caption{Evolução temporal do tempo de resposta durante o teste de carga.}
+    \label{fig:timeline-comparison}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{analysis_results/plots/distributions.png}
+    \caption{Distribuições estatísticas dos tempos de resposta: (a) Histograma, (b) Box Plot, (c) Violin Plot, (d) ECDF.}
+    \label{fig:distributions}
+\end{figure}
+"""
+        with open(os.path.join(self.latex_dir, "figuras_analise.tex"), 'w') as f:
+            f.write(figures_tex)
+        
+        # Gera resumo em Markdown também
+        self._export_markdown()
+        
+        print(f"Arquivos LaTeX exportados para: {self.latex_dir}")
+
+    def _export_markdown(self):
+        """
+        Exporta resultados para Markdown para documentação.
+        """
+        md_content = f"""# Análise de Performance: V1 vs V2
+
+Gerado em: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+## Resumo das Métricas
+
+"""
+        if hasattr(self, 'summary_df'):
+            md_content += self.summary_df.to_markdown(index=False)
+            md_content += "\n\n"
+        
+        md_content += "## Análise Estatística\n\n"
+        
+        if hasattr(self, 'stats_df'):
+            md_content += self.stats_df.to_markdown(index=False)
+            md_content += "\n\n"
+        
+        md_content += """## Gráficos Gerados
+
+- `plots/response_times.png`: Tempo de resposta médio e P95
+- `plots/success_failure_rate.png`: Composição das respostas
+- `plots/timeline_V1.png` / `timeline_V2.png`: Séries temporais por versão
+- `plots/timeline_comparison.png`: Comparação temporal V1 vs V2
+- `plots/distributions.png`: Análise de distribuições
+
+## Interpretação
+
+### Significância Estatística
+- **Mann-Whitney U Test**: Teste não paramétrico para comparar as distribuições
+- **Cliff's Delta**: Medida de effect size (magnitude da diferença)
+- **Bootstrap CI**: Intervalo de confiança para a diferença de médias
+
+### Thresholds de Cliff's Delta
+| Valor |d| | Interpretação |
+|---------|---------------|
+| < 0.147 | Negligível    |
+| < 0.33  | Pequeno       |
+| < 0.474 | Médio         |
+| ≥ 0.474 | Grande        |
+"""
+        
+        with open(os.path.join(self.markdown_dir, "analise_resultados.md"), 'w') as f:
+            f.write(md_content)
+
+    def run_analysis(self, include_timeline=True, include_stats=True, export_latex=True):
         """
         Executa o pipeline completo de análise.
+        
+        Args:
+            include_timeline: Se True, gera análise de séries temporais
+            include_stats: Se True, realiza análise estatística robusta
+            export_latex: Se True, exporta resultados para LaTeX
         """
         self.load_data()
         if not self.data:
@@ -238,7 +692,18 @@ class K6Analyzer:
             return
         self.process_data()
         self.generate_plots()
+        
+        if include_timeline:
+            self.plot_timeline(window_size='5s')
+        
+        if include_stats:
+            self.statistical_analysis()
+        
         self.generate_html_report()
+        
+        if export_latex:
+            self.export_latex()
+        
         print("\nAnálise concluída com sucesso!")
 
 if __name__ == "__main__":

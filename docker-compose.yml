@@ -17,10 +17,19 @@ services:
     ports:
       - "8081:8081"
     healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8081'"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      test: ["CMD", "curl", "-sf", "http://localhost:8081/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     networks:
       - tcc-network
 
@@ -32,7 +41,22 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - servico-adquirente
+      servico-adquirente:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     networks:
       - tcc-network
     # IMPORTANTE: Este serviço deve ter as dependências do Actuator e Prometheus:
@@ -49,7 +73,16 @@ services:
       - ./k6/scripts:/scripts # Mapeia os scripts k6
       - ./k6/results:/scripts/results # Mapeia a pasta de resultados
     depends_on:
-      - servico-pagamento
+      servico-pagamento:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
     networks:
       - tcc-network
 

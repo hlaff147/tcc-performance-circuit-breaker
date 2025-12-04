@@ -1,0 +1,35 @@
+@startuml
+!theme plain
+skinparam componentStyle rectangle
+skinparam backgroundColor white
+skinparam packageStyle rectangle
+
+package "Ambiente de Testes (Docker)" {
+    [K6 Load Generator] as k6 #orange
+    
+    node "Microsserviços" {
+        [Payment Service\n(V1/V2)] as payment #lightblue
+        [Acquirer Service\n(Mock)] as acquirer #lightgrey
+    }
+}
+
+package "Processamento de Dados" {
+    file "Resultados Brutos\n(JSON/CSV)" as raw_data
+    [Scripts Python\n(Analyzer)] as python #yellow
+    file "Relatórios & Gráficos\n(HTML/PNG)" as final_report
+}
+
+k6 -right-> payment : "HTTP Requests\n(Carga)"
+payment -right-> acquirer : "REST Calls\n(Síncrono)"
+k6 ..> raw_data : "Exporta Métricas"
+raw_data ..> python : "Input"
+python ..> final_report : "Gera"
+
+note bottom of acquirer
+  Simula falhas controladas:
+  - Latência (3s)
+  - Erros (500/503)
+  - Timeout
+end note
+
+@enduml

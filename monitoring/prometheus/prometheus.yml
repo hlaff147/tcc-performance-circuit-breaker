@@ -1,5 +1,9 @@
 global:
-  scrape_interval: 15s # Coleta métricas a cada 15 segundos
+  scrape_interval: 5s # Coleta métricas a cada 5s para maior granularidade nos testes
+  evaluation_interval: 5s
+
+rule_files:
+  - "/etc/prometheus/alerts.yml"
 
 scrape_configs:
   # Alvo 1: O próprio Prometheus (para saúde do monitoramento)
@@ -12,8 +16,33 @@ scrape_configs:
     static_configs:
       - targets: ["cadvisor:8080"]
 
-  # Alvo 3: O 'servico-pagamento' (Métricas da JVM, Tomcat e Resilience4j)
-  - job_name: "servico-pagamento"
-    metrics_path: "/actuator/prometheus" # Caminho do Spring Boot Actuator
+  # Alvo 3: Serviço de Pagamento V1 (Sem Circuit Breaker)
+  - job_name: "servico-pagamento-v1"
+    metrics_path: "/actuator/prometheus"
     static_configs:
       - targets: ["servico-pagamento:8080"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: "v1"
+
+  # Alvo 4: Serviço de Pagamento V2 (Com Circuit Breaker)
+  - job_name: "servico-pagamento-v2"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets: ["servico-pagamento:8080"]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: "v2"
+    # Métricas específicas do Circuit Breaker:
+    # - resilience4j_circuitbreaker_state
+    # - resilience4j_circuitbreaker_calls_seconds
+    # - resilience4j_circuitbreaker_failure_rate
+    # - resilience4j_circuitbreaker_slow_call_rate
+
+  # Alvo 5: Serviço Adquirente (simulador de API externa)
+  - job_name: "servico-adquirente"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets: ["servico-adquirente:8081"]

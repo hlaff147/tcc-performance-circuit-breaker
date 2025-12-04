@@ -1,0 +1,158 @@
+# Alertas do Prometheus para monitoramento do Circuit Breaker
+# Configurado para o TCC: Análise de Performance do Circuit Breaker em Microserviços
+
+groups:
+  - name: circuit-breaker-alerts
+    rules:
+      # Alerta quando o Circuit Breaker abre
+      - alert: CircuitBreakerOpen
+        expr: resilience4j_circuitbreaker_state{name="adquirente-cb"} == 2
+        for: 0s
+        labels:
+          severity: critical
+          component: circuit-breaker
+        annotations:
+          summary: "Circuit Breaker {{ $labels.name }} está ABERTO"
+          description: |
+            O Circuit Breaker '{{ $labels.name }}' entrou no estado OPEN.
+            Isso indica que a taxa de falhas ultrapassou o threshold configurado (60%).
+            Requisições estão sendo bloqueadas para proteger o sistema.
+          runbook_url: "https://resilience4j.readme.io/docs/circuitbreaker"
+          
+      # Alerta quando o Circuit Breaker está em half-open por muito tempo
+      - alert: CircuitBreakerHalfOpenProlonged
+        expr: resilience4j_circuitbreaker_state{name="adquirente-cb"} == 1
+        for: 30s
+        labels:
+          severity: warning
+          component: circuit-breaker
+        annotations:
+          summary: "Circuit Breaker {{ $labels.name }} em HALF_OPEN por mais de 30s"
+          description: |
+            O Circuit Breaker '{{ $labels.name }}' está no estado HALF_OPEN há mais de 30 segundos.
+            Isso pode indicar instabilidade na recuperação do serviço downstream.
+            
+      # Alerta de taxa de falhas alta (antes de abrir o CB)
+      - alert: HighFailureRate
+        expr: resilience4j_circuitbreaker_failure_rate{name="adquirente-cb"} > 40
+        for: 10s
+        labels:
+          severity: warning
+          component: circuit-breaker
+        annotations:
+          summary: "Taxa de falhas alta no Circuit Breaker {{ $labels.name }}: {{ $value }}%"
+          description: |
+            A taxa de falhas do Circuit Breaker '{{ $labels.name }}' está em {{ $value }}%.
+            O threshold para abertura é 60%. Monitore a situação.
+            
+      # Alerta de taxa de slow calls alta
+      - alert: HighSlowCallRate
+        expr: resilience4j_circuitbreaker_slow_call_rate{name="adquirente-cb"} > 70
+        for: 15s
+        labels:
+          severity: warning
+          component: circuit-breaker
+        annotations:
+          summary: "Taxa de chamadas lentas alta: {{ $value }}%"
+          description: |
+            O Circuit Breaker '{{ $labels.name }}' está registrando {{ $value }}% de chamadas lentas.
+            O threshold configurado é 85%. Isso pode indicar degradação de performance.
+            
+      # Alerta de muitas requisições bloqueadas
+      - alert: HighNotPermittedCalls
+        expr: rate(resilience4j_circuitbreaker_not_permitted_calls_total{name="adquirente-cb"}[1m]) > 10
+        for: 30s
+        labels:
+          severity: critical
+          component: circuit-breaker
+        annotations:
+          summary: "Muitas requisições bloqueadas pelo Circuit Breaker"
+          description: |
+            Mais de 10 requisições por segundo estão sendo bloqueadas pelo Circuit Breaker '{{ $labels.name }}'.
+            Verifique a saúde do serviço downstream (servico-adquirente).
+            
+  - name: service-health-alerts
+    rules:
+      # Alerta quando o serviço de pagamento está down
+      - alert: PaymentServiceDown
+        expr: up{job=~"servico-pagamento.*"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          component: payment-service
+        annotations:
+          summary: "Serviço de Pagamento está indisponível"
+          description: "O serviço de pagamento não está respondendo ao Prometheus há mais de 30 segundos."
+          
+      # Alerta quando o serviço adquirente está down
+      - alert: AcquirerServiceDown
+        expr: up{job="servico-adquirente"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          component: acquirer-service
+        annotations:
+          summary: "Serviço Adquirente está indisponível"
+          description: "O serviço adquirente (API externa simulada) não está respondendo ao Prometheus."
+          
+      # Alerta de latência alta no serviço de pagamento
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri="/api/pagamento"}[5m])) by (le)) > 1
+        for: 1m
+        labels:
+          severity: warning
+          component: payment-service
+        annotations:
+          summary: "Latência P95 alta no endpoint de pagamento: {{ $value | humanizeDuration }}"
+          description: |
+            A latência P95 do endpoint /api/pagamento está acima de 1 segundo.
+            Isso pode indicar sobrecarga ou problemas de performance.
+            
+      # Alerta de taxa de erro HTTP alta
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          /
+          sum(rate(http_server_requests_seconds_count[5m]))
+          > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          component: payment-service
+        annotations:
+          summary: "Taxa de erro HTTP acima de 10%"
+          description: |
+            Mais de 10% das requisições HTTP estão retornando erros 5xx.
+            Verifique os logs do serviço para identificar a causa.
+
+  - name: resource-alerts
+    rules:
+      # Alerta de uso alto de CPU
+      - alert: HighCPUUsage
+        expr: |
+          sum(rate(container_cpu_usage_seconds_total{name=~".*servico.*"}[5m])) by (name)
+          /
+          sum(container_spec_cpu_quota{name=~".*servico.*"}/container_spec_cpu_period{name=~".*servico.*"}) by (name)
+          > 0.8
+        for: 2m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Uso de CPU alto no container {{ $labels.name }}: {{ $value | humanizePercentage }}"
+          description: "O container está usando mais de 80% da CPU alocada."
+          
+      # Alerta de uso alto de memória
+      - alert: HighMemoryUsage
+        expr: |
+          container_memory_usage_bytes{name=~".*servico.*"}
+          /
+          container_spec_memory_limit_bytes{name=~".*servico.*"}
+          > 0.85
+        for: 2m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Uso de memória alto no container {{ $labels.name }}: {{ $value | humanizePercentage }}"
+          description: "O container está usando mais de 85% da memória alocada."

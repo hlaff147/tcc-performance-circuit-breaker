@@ -13,5 +13,10 @@ RUN mvn -B package -DskipTests -Dmaven.wagon.http.retryHandler.count=3 -Dmaven.w
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
+
+# Instala curl para health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /workspace/target/servico-pagamento-v1-0.0.1-SNAPSHOT.jar app.jar
+EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

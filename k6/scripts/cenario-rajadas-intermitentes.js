@@ -1,6 +1,22 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import exec from 'k6/execution';
+import { Counter, Trend, Rate } from 'k6/metrics';
+
+// ============================================================================
+// MÉTRICAS CUSTOMIZADAS - Análise mais rica do comportamento do sistema
+// ============================================================================
+const fallbackResponses = new Counter('custom_fallback_responses');      // HTTP 202
+const circuitBreakerOpen = new Counter('custom_circuit_breaker_open');   // HTTP 503
+const apiFailures = new Counter('custom_api_failures');                   // HTTP 500
+const successResponses = new Counter('custom_success_responses');         // HTTP 200/201
+
+const responseTimeFallback = new Trend('custom_response_time_fallback');
+const responseTimeSuccess = new Trend('custom_response_time_success');
+const responseTimeFailure = new Trend('custom_response_time_failure');
+
+const successRate = new Rate('custom_success_rate');
+const availabilityRate = new Rate('custom_availability_rate');  // 200 + 202 = disponível
 
 /**
  * CENÁRIO 3: RAJADAS INTERMITENTES
@@ -84,11 +100,41 @@ export default function () {
     headers: { 'Content-Type': 'application/json' },
     tags: { 
       modo,
-      fase: inBurst ? 'rajada' : 'normal'
+      fase: inBurst ? 'rajada' : 'normal',
+      cenario: 'rajadas_intermitentes',
+      versao: __ENV.VERSION || 'unknown',
     },
   };
   
   const res = http.post(url, payload, params);
+  
+  // ============================================================================
+  // COLETA DE MÉTRICAS CUSTOMIZADAS
+  // ============================================================================
+  const status = res.status;
+  const duration = res.timings.duration;
+  
+  if (status === 200 || status === 201) {
+    successResponses.add(1);
+    responseTimeSuccess.add(duration);
+    successRate.add(true);
+    availabilityRate.add(true);
+  } else if (status === 202) {
+    fallbackResponses.add(1);
+    responseTimeFallback.add(duration);
+    successRate.add(false);
+    availabilityRate.add(true);
+  } else if (status === 503) {
+    circuitBreakerOpen.add(1);
+    responseTimeFailure.add(duration);
+    successRate.add(false);
+    availabilityRate.add(false);
+  } else if (status === 500) {
+    apiFailures.add(1);
+    responseTimeFailure.add(duration);
+    successRate.add(false);
+    availabilityRate.add(false);
+  }
   
   check(res, {
     'resposta valida': (r) => [200, 201, 202, 500, 503].includes(r.status),

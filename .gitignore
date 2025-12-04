@@ -30,6 +30,8 @@ logs/
 # Prometheus & Grafana
 prometheus/data/
 grafana/data/
+monitoring/prometheus/data/
+monitoring/grafana/data/
 
 # Node (for k6 if needed)
 node_modules/
@@ -37,29 +39,76 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# k6 results - Arquivos de teste grandes (podem chegar a GB)
+# ============================================
+# k6 Results - Arquivos de teste (MUITO GRANDES)
+# ============================================
+# Arquivos JSON completos podem chegar a 1.4GB+
 k6/results/*.json
 k6/results/scenarios/*.json
+
+# Manter apenas os arquivos de resumo (pequenos, ~8KB cada)
+!k6/results/*_summary.json
 !k6/results/scenarios/*_summary.json
 
+# ============================================
 # Analysis results - Gerados automaticamente
-analysis_results/
+# ============================================
+# Comentado para permitir versionamento dos resultados finais
+# analysis_results/
 
-# Python virtual environment
+# ============================================
+# Python
+# ============================================
 .venv/
 venv/
+env/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
 
+# ============================================
+# Java/Maven - Arquivos compilados
+# ============================================
+*.jar
+*.war
+*.ear
+*.class
+
+# ============================================
+# Arquivos grandes e binários
+# ============================================
+# PlantUML JAR (11MB) - deve ser baixado localmente
+docs/diagramas/plantuml.jar
+
+# ============================================
+# LaTeX - Arquivos auxiliares de compilação
+# ============================================
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.nav
+*.snm
+*.vrb
+
+# ============================================
 # Temp files
+# ============================================
 *.tmp
 *.temp
+*~
 
-# Adições sugeridas para evitar o versionamento de grandes gerados por testes e ferramentas
-# Ignorar pasta de resultados do k6 (JSON grandes)
-k6/results/
-
-# Ignorar o JAR gerado dos diagramas (arquivo grande)
-docs/diagramas/plantuml.jar
+# ============================================
+# Pacotes externos (baixar localmente)
+# ============================================
+LaTex+Package/
