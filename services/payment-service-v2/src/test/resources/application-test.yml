@@ -1,0 +1,42 @@
+server:
+  port: 0  # Porta aleatória para testes
+
+# Configuração do Feign Client para testes
+spring:
+  application:
+    name: payment-service-v2-test
+
+# Resilience4j - Configuração para testes (valores menores para testes rápidos)
+resilience4j:
+  circuitbreaker:
+    instances:
+      adquirente-cb:
+        failureRateThreshold: 60
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 8
+        minimumNumberOfCalls: 5
+        waitDurationInOpenState: 2s
+        permittedNumberOfCallsInHalfOpenState: 3
+        registerHealthIndicator: true
+        slowCallDurationThreshold: 1000ms
+        slowCallRateThreshold: 80
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        
+  timelimiter:
+    instances:
+      adquirente-cb:
+        timeoutDuration: 2000ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,circuitbreakers
+  health:
+    circuitbreakers:
+      enabled: true
+
+logging:
+  level:
+    br.ufpe.cin.tcc: DEBUG
+    io.github.resilience4j: DEBUG

@@ -1,0 +1,9 @@
+# Consultas exemplo para usar com export_prometheus_data.sh
+# Remova as linhas que não precisar e adicione outras conforme necessário.
+rate(http_server_requests_seconds_count{uri="/pagar"}[1m])
+histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri="/pagar"}[5m])) by (le))
+max(resilience4j_circuitbreaker_state{name="adquirente-cb"})
+sum(rate(resilience4j_circuitbreaker_calls_total{call_result="FAILURE"}[5m]))
+max(jvm_memory_used_bytes)
+rate(container_cpu_usage_seconds_total{name=~"servico-.*"}[1m])
+max(container_memory_usage_bytes{name=~"servico-.*"})

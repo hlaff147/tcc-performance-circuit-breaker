@@ -1,0 +1,207 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Análise de Performance: Circuit Breaker</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                .container { max-width: 1200px; margin: 0 auto; }
+                table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f4f4f4; }
+                .section { margin: 40px 0; }
+                img { max-width: 100%; height: auto; margin: 20px 0; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Relatório de Análise de Performance: Circuit Breaker</h1>
+                
+                <div class="section">
+                    <h2>Resumo dos Tempos de Resposta</h2>
+                    <table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>version</th>
+      <th>scenario</th>
+      <th>avg_response_time</th>
+      <th>p95_response_time</th>
+      <th>min_response_time</th>
+      <th>max_response_time</th>
+      <th>total_requests</th>
+      <th>success_count</th>
+      <th>fallback_count</th>
+      <th>http_5xx_count</th>
+      <th>other_error_count</th>
+      <th>success_rate</th>
+      <th>fallback_rate</th>
+      <th>error_rate</th>
+      <th>http_5xx_rate</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>V1</td>
+      <td>Normal</td>
+      <td>26.785169</td>
+      <td>52.029846</td>
+      <td>1.809167</td>
+      <td>378.346458</td>
+      <td>2950</td>
+      <td>2950</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>100.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>V1</td>
+      <td>Latencia</td>
+      <td>3044.643744</td>
+      <td>3108.782112</td>
+      <td>3003.651793</td>
+      <td>3114.983002</td>
+      <td>750</td>
+      <td>750</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>100.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>V1</td>
+      <td>Falha</td>
+      <td>21.567327</td>
+      <td>56.982079</td>
+      <td>1.720042</td>
+      <td>149.135208</td>
+      <td>2950</td>
+      <td>0</td>
+      <td>0</td>
+      <td>2950</td>
+      <td>0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>100.0</td>
+      <td>100.0</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>V2</td>
+      <td>Normal</td>
+      <td>44.166537</td>
+      <td>157.568352</td>
+      <td>4.362834</td>
+      <td>416.043958</td>
+      <td>2900</td>
+      <td>2900</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>100.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>V2</td>
+      <td>Latencia</td>
+      <td>3073.200305</td>
+      <td>3128.428241</td>
+      <td>3018.570709</td>
+      <td>3139.981876</td>
+      <td>750</td>
+      <td>750</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>100.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>V2</td>
+      <td>Falha</td>
+      <td>24.501516</td>
+      <td>89.161233</td>
+      <td>0.975833</td>
+      <td>247.764167</td>
+      <td>2950</td>
+      <td>0</td>
+      <td>2950</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0.0</td>
+      <td>100.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+  </tbody>
+</table>
+                </div>
+                
+                <div class="section">
+                    <h2>Análise Estatística</h2>
+                    <table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>scenario</th>
+      <th>p_value</th>
+      <th>effect_size</th>
+      <th>significant_difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>Normal</td>
+      <td>NaN</td>
+      <td>inf</td>
+      <td>False</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>Latencia</td>
+      <td>NaN</td>
+      <td>inf</td>
+      <td>False</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>Falha</td>
+      <td>NaN</td>
+      <td>inf</td>
+      <td>False</td>
+    </tr>
+  </tbody>
+</table>
+                </div>
+                
+                <div class="section">
+                    <h2>Gráficos Comparativos</h2>
+                    <img src="plots/response_times_comparison.png" alt="Comparação de Tempos de Resposta">
+                    <img src="plots/success_rate_comparison.png" alt="Comparação de Taxa de Sucesso">
+                </div>
+                
+                <div class="section">
+                    <h2>Conclusões</h2>
+                    <p></p>
+                </div>
+            </div>
+        </body>
+        </html>
+        

@@ -13,10 +13,18 @@ DEFAULT_NETWORK_PREFIX="${COMPOSE_PROJECT_NAME:-tcc-performance-circuit-breaker}
 NETWORK_NAME="${COMPOSE_NETWORK_NAME:-${DEFAULT_NETWORK_PREFIX}_tcc-network}"
 K6_IMAGE="${K6_IMAGE:-grafana/k6:latest}"
 
-if [ -d "${PROJECT_ROOT}/k6-scripts" ]; then
-  K6_SCRIPTS_HOST_DIR="${PROJECT_ROOT}/k6-scripts"
-else
-  K6_SCRIPTS_HOST_DIR="${PROJECT_ROOT}/k6/scripts"
+BASE_K6_SCRIPTS_DIR="${PROJECT_ROOT}/k6/scripts"
+CUSTOM_K6_SCRIPTS_DIR=""
+
+if [ -n "${K6_SCRIPTS_HOST_DIR:-}" ]; then
+  CUSTOM_K6_SCRIPTS_DIR="${K6_SCRIPTS_HOST_DIR}"
+elif [ -d "${PROJECT_ROOT}/k6-scripts" ]; then
+  CUSTOM_K6_SCRIPTS_DIR="${PROJECT_ROOT}/k6-scripts"
+fi
+
+if [ ! -d "${BASE_K6_SCRIPTS_DIR}" ]; then
+  echo "Erro: diretório base de scripts k6 (${BASE_K6_SCRIPTS_DIR}) não encontrado." >&2
+  exit 1
 fi
 
 if [ -d "${PROJECT_ROOT}/k6-results" ]; then
@@ -28,14 +36,24 @@ fi
 mkdir -p "${K6_RESULTS_HOST_DIR}"
 
 SCENARIOS=(
-  "Normal:cenario-A-normal.js"
-  "Latencia:cenario-B-latencia.js"
-  "Falha:cenario-C-falha.js"
-  "Estresse:cenario-D-estresse-crescente.js"
-  "Recuperacao:cenario-E-recuperacao.js"
-  "FalhasIntermitentes:cenario-F-falhas-intermitentes.js"
-  #"AltaConcorrencia:cenario-G-alta-concorrencia.js"
+  "Completo:cenario-completo.js"
 )
+
+resolve_scenario_path() {
+  local filename="$1"
+
+  if [ -n "${CUSTOM_K6_SCRIPTS_DIR}" ] && [ -f "${CUSTOM_K6_SCRIPTS_DIR}/${filename}" ]; then
+    echo "${CUSTOM_K6_SCRIPTS_DIR}/${filename}"
+    return 0
+  fi
+
+  if [ -f "${BASE_K6_SCRIPTS_DIR}/${filename}" ]; then
+    echo "${BASE_K6_SCRIPTS_DIR}/${filename}"
+    return 0
+  fi
+
+  return 1
+}
 
 wait_for_http() {
   local url="$1"
@@ -43,9 +61,15 @@ wait_for_http() {
   local delay="${3:-3}"    # Aumentado de 2 para 3 segundos de delay
 
   for attempt in $(seq 1 "${retries}"); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
-      return 0
+    local status
+    status="$(curl -sS -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo 000)"
+
+    if [ "${status}" != "000" ]; then
+      if [ "${status}" -ge 200 ] && [ "${status}" -lt 500 ]; then
+        return 0
+      fi
     fi
+
     sleep "${delay}"
   done
 
@@ -87,15 +111,32 @@ run_k6_scenarios() {
     IFS=":" read -r scenario_label scenario_file <<<"${scenario}"
     output_file="${K6_RESULTS_HOST_DIR}/${version_label}_${scenario_label}.json"
 
-    echo "Executando cenário ${scenario_label} (${scenario_file}) para ${version_label}..."
+    if ! scenario_host_path="$(resolve_scenario_path "${scenario_file}")"; then
+      echo "Erro: script ${scenario_file} não encontrado em ${CUSTOM_K6_SCRIPTS_DIR:-<custom não definido>} nem em ${BASE_K6_SCRIPTS_DIR}." >&2
+      return 1
+    fi
+
+    scenario_host_dir="$(dirname "${scenario_host_path}")"
+    scenario_basename="$(basename "${scenario_host_path}")"
+    source_hint="base"
+
+    if [ -n "${CUSTOM_K6_SCRIPTS_DIR}" ] && [ "${scenario_host_dir}" = "${CUSTOM_K6_SCRIPTS_DIR}" ]; then
+      source_hint="custom"
+    fi
+
+    echo "Executando cenário ${scenario_label} (${scenario_basename}) para ${version_label} [${source_hint}]..."
+
     # Executa o k6 e ignora o código de saída para continuar mesmo se o teste falhar
     docker run --rm -i \
       --network="${NETWORK_NAME}" \
-      -v "${K6_SCRIPTS_HOST_DIR}:/scripts" \
-      -v "${K6_RESULTS_HOST_DIR}:/scripts/results" \
+      -e "PAYMENT_BASE_URL=http://servico-pagamento:8080" \
+      -e "PAYMENT_MODE_DISTRIBUTION=normal:0.7,latencia:0.2,falha:0.1" \
+      -v "${scenario_host_dir}:/scripts:ro" \
+      -v "${K6_RESULTS_HOST_DIR}:/results" \
       "${K6_IMAGE}" run \
-      "/scripts/${scenario_file}" \
-      --out "json=/scripts/results/${version_label}_${scenario_label}.json" || true
+      "/scripts/${scenario_basename}" \
+      --out "json=/results/${version_label}_${scenario_label}.json" \
+      --summary-export "/results/${version_label}_${scenario_label}_summary.json" || true
 
     echo "Resultado salvo em ${output_file}"
     

@@ -16,14 +16,10 @@ K6_SCRIPTS_PATH = "/scripts"  # Caminho DENTRO do contêiner k6
 K6_RESULTS_PATH_IN_CONTAINER = "/scripts/results"
 RESULTS_DIR = "resultados_tcc"  # Diretório local para salvar todos os artefatos
 
-# Matriz de Testes: Define todos os 6 testes a serem executados
-TEST_MATRIX = [
-    {"version": "V1 (Baseline)", "context_path": "./servico-pagamento-v1", "scenario": "Normal", "k6_script": "cenario-A-normal.js"},
-    {"version": "V1 (Baseline)", "context_path": "./servico-pagamento-v1", "scenario": "Latência", "k6_script": "cenario-B-latencia.js"},
-    {"version": "V1 (Baseline)", "context_path": "./servico-pagamento-v1", "scenario": "Falha", "k6_script": "cenario-C-falha.js"},
-    {"version": "V2 (Circuit Breaker)", "context_path": "./servico-pagamento-v2", "scenario": "Normal", "k6_script": "cenario-A-normal.js"},
-    {"version": "V2 (Circuit Breaker)", "context_path": "./servico-pagamento-v2", "scenario": "Latência", "k6_script": "cenario-B-latencia.js"},
-    {"version": "V2 (Circuit Breaker)", "context_path": "./servico-pagamento-v2", "scenario": "Falha", "k6_script": "cenario-C-falha.js"},
+# Matriz de Testes: Executa apenas o cenário completo único
+EXPERIMENTS = [
+    {"version": "V1 (Baseline)", "output_file": "V1_Completo.json", "k6_script": "cenario-completo.js"},
+    {"version": "V2 (Circuit Breaker)", "output_file": "V2_Completo.json", "k6_script": "cenario-completo.js"},
 ]
 
 # Métricas do Prometheus (PromQL) a serem coletadas
@@ -137,6 +133,16 @@ def _extract_trend_stats(metric_payload: Dict[str, Any], prefix: str) -> Dict[st
             stats[f"{prefix}_{suffix}_ms"] = float(value)
     return stats
 
+def run_k6_test(script_name: str, output_file: str) -> None:
+    """Executa um teste k6 dentro do contêiner k6."""
+    k6_command = (
+        f"docker exec {K6_CONTAINER_NAME} k6 run "
+        f"{K6_SCRIPTS_PATH}/{script_name} "
+        f"--out json={K6_RESULTS_PATH_IN_CONTAINER}/{output_file}"
+    )
+    print(f"  [k6] Executando: {k6_command}")
+    run_docker_command(k6_command)
+
 def parse_k6_summary(json_file_path: str) -> Dict[str, Any]:
     """
     Analisa o arquivo JSON de saída do k6 e extrai um dicionário detalhado de métricas.
@@ -209,13 +215,15 @@ def main() -> None:
 
     all_results_data: List[Dict[str, Any]] = []
 
-    for test in TEST_MATRIX:
-        version = test["version"]
-        scenario = test["scenario"]
-        context_path = test["context_path"]
-        k6_script = test["k6_script"]
+    for exp in EXPERIMENTS:
+        version = exp["version"]
+        k6_script = exp["k6_script"]
+        output_file = exp["output_file"]
 
-        test_name = f"{version.replace(' ', '_')}_{scenario}"
+        # Define o caminho de contexto com base na versão
+        context_path = "./services/payment-service-v2" if "V2" in version else "./services/payment-service-v1"
+
+        test_name = f"{version.replace(' ', '_')}_Completo"
         test_output_dir = os.path.join(RESULTS_DIR, test_name)
         os.makedirs(test_output_dir, exist_ok=True)
 
@@ -229,25 +237,16 @@ def main() -> None:
 
             print(f"[Setup] Subindo ambiente para {version}...")
             run_docker_command(
-                "docker-compose up -d --build servico-pagamento servico-adquirente prometheus cadvisor grafana k6-tester"
+                "docker-compose up -d --build payment-service acquirer-service prometheus cadvisor grafana k6"
             )
 
             print("[Setup] Aguardando 30s para a inicialização dos serviços...")
             time.sleep(30)
 
-            k6_json_output_file = f"summary_{test_name}.json"
-            k6_json_output_path_container = f"{K6_RESULTS_PATH_IN_CONTAINER}/{k6_json_output_file}"
-
-            k6_command = (
-                f"docker exec {K6_CONTAINER_NAME} k6 run "
-                f"{K6_SCRIPTS_PATH}/{k6_script} "
-                f"--summary-export={k6_json_output_path_container}"
-            )
-
             start_time = datetime.datetime.now()
             print(f"[k6] Início do teste k6: {start_time}")
 
-            run_docker_command(k6_command)
+            run_k6_test(k6_script, output_file)
 
             end_time = datetime.datetime.now()
             print(f"[k6] Fim do teste k6: {end_time}")
@@ -260,15 +259,15 @@ def main() -> None:
                 test_name,
             )
 
-            k6_json_output_path_local = os.path.join(test_output_dir, k6_json_output_file)
+            k6_json_output_path_local = os.path.join(test_output_dir, output_file)
             run_docker_command(
-                f"docker cp {K6_CONTAINER_NAME}:{k6_json_output_path_container} {k6_json_output_path_local}"
+                f"docker cp {K6_CONTAINER_NAME}:{K6_RESULTS_PATH_IN_CONTAINER}/{output_file} {k6_json_output_path_local}"
             )
 
             summary_data = parse_k6_summary(k6_json_output_path_local)
 
             summary_data["versao"] = version
-            summary_data["cenario"] = scenario
+            summary_data["cenario"] = "Completo"
             all_results_data.append(summary_data)
 
             print(

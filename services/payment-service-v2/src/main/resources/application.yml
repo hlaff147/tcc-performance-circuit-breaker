@@ -1,27 +1,99 @@
 server:
   port: 8080
 
+spring:
+  application:
+    name: payment-service-v2
+
 resilience4j:
   circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        # Métricas detalhadas para Prometheus
+        eventConsumerBufferSize: 100
     instances:
       adquirente-cb:
-        failureRateThreshold: 50
+        # CONFIGURAÇÃO OTIMIZADA PARA ALTA DISPONIBILIDADE
+        # Objetivo: Proteger durante crises MAS maximizar sucesso na recuperação
+        
+        # Abre com 60% de falhas (mais tolerante - era 50%)
+        failureRateThreshold: 60
         slidingWindowType: COUNT_BASED
-        slidingWindowSize: 20
-        minimumNumberOfCalls: 10
-        waitDurationInOpenState: 10s
-        permittedNumberOfCallsInHalfOpenState: 5
+        # Janela de 15 chamadas (equilíbrio entre reatividade e estabilidade)
+        slidingWindowSize: 15
+        # Avalia após 8 chamadas
+        minimumNumberOfCalls: 8
+        
+        # CHAVE: Fecha rápido quando API se recupera
+        # Tenta reabrir após apenas 3s (era 10s)
+        waitDurationInOpenState: 3s
+        
+        # CHAVE: Testa com mais chamadas para garantir recuperação real
+        # Se 7 de 10 funcionarem (70%), fecha o circuito
+        permittedNumberOfCallsInHalfOpenState: 10
+        
         registerHealthIndicator: true
+        
+        # Slow call: mais tolerante
+        slowCallDurationThreshold: 2500ms
+        slowCallRateThreshold: 85
+        
+        # Transição automática de half-open para closed se taxa de sucesso > 50%
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        
+        # Registro de exceções que contam como falha
+        recordExceptions:
+          - java.net.SocketTimeoutException
+          - java.net.ConnectException
+          - java.io.IOException
+          - feign.FeignException
+          - org.springframework.web.client.HttpServerErrorException
+        
   timelimiter:
     instances:
       adquirente-cb:
-        timeoutDuration: 2500ms
+        # Timeout generoso: 3s (permite API lenta se recuperar)
+        timeoutDuration: 3000ms
+        cancelRunningFuture: true
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,circuitbreakers
+        include: health,info,circuitbreakers,circuitbreakerevents,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+    circuitbreakers:
+      enabled: true
   health:
     circuitbreakers:
       enabled: true
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+  metrics:
+    tags:
+      application: payment-service-v2
+      version: v2
+      experiment: circuit-breaker-tcc
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        resilience4j.circuitbreaker.calls: true
+        payment.processing.time: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+        resilience4j.circuitbreaker.calls: 0.5, 0.9, 0.95, 0.99
+        payment.processing.time: 0.5, 0.9, 0.95, 0.99
+      slo:
+        http.server.requests: 100ms, 200ms, 500ms, 1s, 2s, 5s

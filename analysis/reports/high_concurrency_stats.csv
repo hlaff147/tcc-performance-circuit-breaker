@@ -1,7 +1,0 @@
-Métrica,V1 (Baseline),V2 (Circuit Breaker)
-Tempo de Resposta Médio (ms),11.29,1.98
-Tempo de Resposta P95 (ms),42.49,4.19
-Tempo de Resposta P99 (ms),192.1,10.33
-Taxa de Requisições Média (req/s),1.0,1.0
-Máximo de VUs,500.0,500.0
-Total de Requisições,45098.0,45311.0
