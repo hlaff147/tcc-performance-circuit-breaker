@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>br.ufpe.cin.tcc</groupId>
-    <artifactId>servico-pagamento-v2</artifactId>
+    <artifactId>servico-pagamento-v4</artifactId>
     <version>2.0.0</version>
-    <name>servico-pagamento-v2</name>
-    <description>Versão com Resilience4j do serviço de pagamento</description>
+    <name>servico-pagamento-v4</name>
+    <description>Versão com CIRCUIT BREAKER + RETRY combinados do serviço de pagamento</description>
 
     <properties>
         <java.version>17</java.version>
@@ -42,6 +42,7 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
+        <!-- Resilience4j completo (CB + Retry + TimeLimiter) -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
@@ -60,7 +61,7 @@
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-micrometer</artifactId>
         </dependency>
-        <!-- AOP for @Timed annotations -->
+        <!-- AOP for @CircuitBreaker, @Retry and @Timed annotations -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
@@ -76,12 +77,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.wiremock</groupId>
-            <artifactId>wiremock-standalone</artifactId>
-            <version>3.3.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

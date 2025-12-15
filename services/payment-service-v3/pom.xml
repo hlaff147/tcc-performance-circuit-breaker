@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>br.ufpe.cin.tcc</groupId>
-    <artifactId>servico-pagamento-v2</artifactId>
+    <artifactId>servico-pagamento-v3</artifactId>
     <version>2.0.0</version>
-    <name>servico-pagamento-v2</name>
-    <description>Versão com Resilience4j do serviço de pagamento</description>
+    <name>servico-pagamento-v3</name>
+    <description>Versão com RETRY (sem Circuit Breaker) do serviço de pagamento</description>
 
     <properties>
         <java.version>17</java.version>
@@ -42,9 +42,16 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
+        <!-- Resilience4j para RETRY (NÃO usar circuitbreaker starter) -->
         <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <version>2.2.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+            <version>2.2.0</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -59,8 +66,9 @@
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-micrometer</artifactId>
+            <version>2.2.0</version>
         </dependency>
-        <!-- AOP for @Timed annotations -->
+        <!-- AOP for @Retry and @Timed annotations -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
@@ -76,12 +84,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.wiremock</groupId>
-            <artifactId>wiremock-standalone</artifactId>
-            <version>3.3.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

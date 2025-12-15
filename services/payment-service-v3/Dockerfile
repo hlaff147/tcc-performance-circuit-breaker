@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 
-FROM maven:3.8.8-eclipse-temurin-17 AS build
+FROM maven:3.8.7-eclipse-temurin-17 AS builder
 WORKDIR /workspace
 
 # Cache Maven dependencies
-COPY pom.xml .
+COPY pom.xml ./
 RUN mvn dependency:go-offline -B || true
 
 # Build application with retry
@@ -17,6 +17,6 @@ WORKDIR /app
 # Instala curl para health checks
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /workspace/target/servico-adquirente-2.0.0.jar app.jar
-EXPOSE 8081
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+COPY --from=builder /workspace/target/servico-pagamento-v3-2.0.0.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

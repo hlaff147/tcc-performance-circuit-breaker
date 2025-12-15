@@ -13,7 +13,7 @@
 
     <groupId>br.ufpe.cin.tcc</groupId>
     <artifactId>servico-pagamento-v1</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
     <name>servico-pagamento-v1</name>
     <description>Versão Baseline do serviço de pagamento</description>
 

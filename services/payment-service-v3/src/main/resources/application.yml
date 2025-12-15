@@ -1,0 +1,115 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: payment-service-v3
+
+# ==============================================================================
+# CONFIGURAÇÃO RESILIENCE4J - APENAS RETRY (SEM CIRCUIT BREAKER)
+# ==============================================================================
+# Esta versão usa apenas o padrão Retry para comparação com Circuit Breaker.
+# Objetivo: demonstrar trade-offs entre Retry isolado vs CB em cenários de falha.
+# ==============================================================================
+
+resilience4j:
+  retry:
+    configs:
+      default:
+        registerHealthIndicator: true
+        eventConsumerBufferSize: 100
+    instances:
+      adquirente-retry:
+        # ============================================================
+        # CONFIGURAÇÃO PADRÃO PARA EXPERIMENTO
+        # Parâmetros escolhidos para comparabilidade com CB:
+        # - maxAttempts: 3 (mesmo número típico de retries)
+        # - waitDuration: 500ms (tempo razoável entre tentativas)
+        # - exponentialBackoff: sim (prática recomendada)
+        # - jitter: 0.5 (evita thundering herd)
+        # ============================================================
+        
+        # Número máximo de tentativas (inclui a chamada original)
+        maxAttempts: 3
+        
+        # Tempo de espera entre tentativas
+        waitDuration: 500ms
+        
+        # Backoff exponencial: cada retry espera 2x mais
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2.0
+        
+        # Jitter: adiciona aleatoriedade para evitar sincronização
+        # waitDuration * (1 - randomizedWaitFactor) até waitDuration * (1 + randomizedWaitFactor)
+        enableRandomizedWait: true
+        randomizedWaitFactor: 0.5
+        
+        # Exceções que disparam retry automaticamente
+        retryExceptions:
+          - java.net.SocketTimeoutException
+          - java.net.ConnectException
+          - java.io.IOException
+          - feign.FeignException.ServiceUnavailable
+          - feign.FeignException.InternalServerError
+          - feign.RetryableException
+          - org.springframework.web.client.HttpServerErrorException
+          - java.lang.RuntimeException
+          - br.ufpe.cin.tcc.pagamento.service.PaymentService$AcquirerServiceException
+        
+        # Exceções que NÃO devem disparar retry (erros de cliente)
+        ignoreExceptions:
+          - java.lang.IllegalArgumentException
+          - feign.FeignException.BadRequest
+          - feign.FeignException.NotFound
+          - feign.FeignException.UnprocessableEntity
+
+# ==============================================================================
+# CONFIGURAÇÃO FEIGN CLIENT
+# ==============================================================================
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 3000  # Timeout generoso para permitir retries úteis
+
+# ==============================================================================
+# MANAGEMENT / ACTUATOR - EXPOSIÇÃO DE MÉTRICAS
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,retries,retryevents,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+  metrics:
+    tags:
+      application: payment-service-v3
+      version: v3
+      treatment: retry-only
+      experiment: circuit-breaker-tcc
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        resilience4j.retry.calls: true
+        payment.processing.time: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+        resilience4j.retry.calls: 0.5, 0.9, 0.95, 0.99
+        payment.processing.time: 0.5, 0.9, 0.95, 0.99
+      slo:
+        http.server.requests: 100ms, 200ms, 500ms, 1s, 2s, 5s

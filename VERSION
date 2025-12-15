@@ -1,14 +1,21 @@
 # Versão atual do projeto TCC
 # Este arquivo é usado pelos scripts de automação para versionamento dos resultados
-PROJECT_VERSION=1.0.0
+PROJECT_VERSION=2.0.0
 
 # Descrição da versão
-VERSION_DESCRIPTION="Refatoração completa: camada de serviço, testes unitários/integração, métricas K6 padronizadas"
+VERSION_DESCRIPTION="Comparativo CB vs Retry: novos serviços V3 (Retry) e V4 (CB+Retry), análise estatística"
 
 # Data de criação
-VERSION_DATE="2024-12-06"
+VERSION_DATE="2024-12-15"
 
 # Changelog
+# v2.0.0 - Comparativo CB vs Retry
+#   - Novo serviço V3: Retry-only (maxAttempts=3, backoff exponencial, jitter)
+#   - Novo serviço V4: Circuit Breaker + Retry combinados
+#   - Script run_comparative_experiment.sh para N repetições
+#   - Análise estatística com IC 95% e teste Mann-Whitney
+#   - Métricas de retry expostas via Prometheus
+#
 # v1.0.0 - Refatoração completa
 #   - Extração da camada de serviço (PaymentService) em V1 e V2
 #   - DTOs tipados (PaymentRequest, PaymentResponse)

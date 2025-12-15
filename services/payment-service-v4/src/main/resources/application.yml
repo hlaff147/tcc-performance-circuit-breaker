@@ -1,0 +1,164 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: payment-service-v4
+
+# ==============================================================================
+# CONFIGURAÇÃO RESILIENCE4J - CIRCUIT BREAKER + RETRY COMBINADOS
+# ==============================================================================
+# Esta versão combina ambos os padrões para testar a hipótese H3:
+# "A combinação de CB + Retry pode superar cada um isoladamente"
+#
+# Ordem de execução dos decoradores (configurada via aspect-order):
+# 1. CircuitBreaker (mais externo) - protege contra falhas sistêmicas
+# 2. Retry (mais interno) - tenta novamente dentro do CB aberto
+#
+# Comportamento esperado:
+# - Quando CB está CLOSED: Retry funciona normalmente (até N tentativas)
+# - Quando CB está OPEN: Retry NÃO é executado, fallback é imediato
+# - Quando CB está HALF_OPEN: Retry pode ajudar na recuperação
+# ==============================================================================
+
+resilience4j:
+  # ============================================================
+  # CIRCUIT BREAKER - Configuração conservadora para combinar com Retry
+  # ============================================================
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        eventConsumerBufferSize: 100
+    instances:
+      adquirente-cb:
+        # Threshold mais alto porque Retry já absorve falhas transitórias
+        failureRateThreshold: 60
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 15
+        minimumNumberOfCalls: 8
+        
+        # Tempo de espera moderado
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 5
+        
+        # Slow call mais tolerante (Retry pode resolver)
+        slowCallDurationThreshold: 3000ms
+        slowCallRateThreshold: 80
+        
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        
+        # Exceções que contam como falha (após Retry)
+        recordExceptions:
+          - java.net.SocketTimeoutException
+          - java.net.ConnectException
+          - java.io.IOException
+          - feign.FeignException
+          - org.springframework.web.client.HttpServerErrorException
+          - br.ufpe.cin.tcc.pagamento.service.PaymentService$AcquirerServiceException
+  
+  # ============================================================
+  # RETRY - Configuração conservadora para combinar com CB
+  # ============================================================
+  retry:
+    configs:
+      default:
+        registerHealthIndicator: true
+        eventConsumerBufferSize: 100
+    instances:
+      adquirente-retry:
+        # Menos tentativas quando usado com CB (CB protege de falhas sistêmicas)
+        maxAttempts: 2
+        
+        # Tempo de espera menor (CB assume se demorar muito)
+        waitDuration: 300ms
+        
+        # Backoff menos agressivo
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 1.5
+        
+        # Jitter para evitar sincronização
+        enableRandomizedWait: true
+        randomizedWaitFactor: 0.3
+        
+        # Exceções que disparam retry
+        retryExceptions:
+          - java.net.SocketTimeoutException
+          - java.net.ConnectException
+          - java.io.IOException
+          - feign.FeignException.ServiceUnavailable
+          - feign.FeignException.InternalServerError
+          - feign.RetryableException
+          - java.lang.RuntimeException
+          - br.ufpe.cin.tcc.pagamento.service.PaymentService$AcquirerServiceException
+        
+        # Exceções que NÃO devem disparar retry
+        ignoreExceptions:
+          - java.lang.IllegalArgumentException
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+  
+  # ============================================================
+  # TIME LIMITER - Timeout geral
+  # ============================================================
+  timelimiter:
+    instances:
+      adquirente-cb:
+        timeoutDuration: 4000ms
+        cancelRunningFuture: true
+
+# ==============================================================================
+# CONFIGURAÇÃO FEIGN CLIENT
+# ==============================================================================
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 3000
+
+# ==============================================================================
+# MANAGEMENT / ACTUATOR - EXPOSIÇÃO DE MÉTRICAS
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakers,circuitbreakerevents,retries,retryevents,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+    prometheus:
+      enabled: true
+    circuitbreakers:
+      enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+  metrics:
+    tags:
+      application: payment-service-v4
+      version: v4
+      treatment: cb-plus-retry
+      experiment: circuit-breaker-tcc
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        resilience4j.circuitbreaker.calls: true
+        resilience4j.retry.calls: true
+        payment.processing.time: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+        resilience4j.circuitbreaker.calls: 0.5, 0.9, 0.95, 0.99
+        resilience4j.retry.calls: 0.5, 0.9, 0.95, 0.99
+        payment.processing.time: 0.5, 0.9, 0.95, 0.99
+      slo:
+        http.server.requests: 100ms, 200ms, 500ms, 1s, 2s, 5s
