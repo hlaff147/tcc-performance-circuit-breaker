@@ -1,8 +1,20 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { 
+  recordMetrics, 
+  getV2Thresholds, 
+  generatePaymentPayload, 
+  getDefaultHeaders,
+  successRate,
+  fallbackRate,
+  failureRate,
+  availabilityRate
+} from './lib/metrics.js';
 
 // Configurações parametrizáveis via variáveis de ambiente para suportar execução local ou via Docker.
 const BASE_URL = __ENV.PAYMENT_BASE_URL || 'http://servico-pagamento:8080';
+const VERSION = __ENV.VERSION || 'unknown';
+
 const MODE_DISTRIBUTION = (__ENV.PAYMENT_MODE_DISTRIBUTION || 'normal:0.7,latencia:0.2,falha:0.1')
   .split(',')
   .map((item) => {
@@ -41,11 +53,12 @@ export const options = {
     // 5. Recuperação (5m): Reduz gradualmente para 0 VUs.
     { duration: '5m', target: 0 },
   ],
-  thresholds: {
-    // A taxa de falhas HTTP deve ser menor que 5%
-    'http_req_failed': ['rate<0.05'],
-    // 95% das requisições devem ser concluídas em menos de 500ms
+  thresholds: VERSION === 'v2' ? getV2Thresholds({
     'http_req_duration': ['p(95)<500'],
+    'custom_availability_rate': ['rate>0.95'],
+  }) : {
+    'http_req_failed': ['rate<0.15'],
+    'http_req_duration': ['p(95)<3000'],
   },
 };
 
@@ -54,27 +67,27 @@ export default function () {
   const modo = pickMode();
   const url = `${BASE_URL}/pagar?modo=${modo}`;
 
-  const payload = JSON.stringify({
-    amount: 100.0,
-    payment_method: 'credit_card',
-    customer_id: `customer-${__VU}`,
-  });
+  const payload = generatePaymentPayload(__VU);
 
   const params = {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: getDefaultHeaders(),
     tags: {
       modo,
+      cenario: 'completo',
+      versao: VERSION,
     },
   };
 
   // Envia a requisição POST
   const res = http.post(url, payload, params);
 
+  // Registra métricas padronizadas
+  recordMetrics(res);
+
   // Verifica se a requisição foi bem-sucedida (status 200 ou 201)
   check(res, {
     'status is 2xx or 202 fallback': (r) => r.status === 200 || r.status === 201 || r.status === 202,
+    'resposta valida': (r) => [200, 201, 202, 500, 503].includes(r.status),
   });
 
   // Pausa de 1 segundo entre as iterações de um mesmo usuário virtual

@@ -112,3 +112,23 @@ docs/diagramas/plantuml.jar
 # Pacotes externos (baixar localmente)
 # ============================================
 LaTex+Package/
+
+# ============================================
+# Results Archive - Versionamento de resultados
+# ============================================
+# Ignorar TODOS os arquivos JSON grandes (podem chegar a 400MB+ cada)
+# Padrão recursivo ** cobre /results/, /results/scenarios/, etc.
+results_archive/**/*.json
+!results_archive/**/*_summary.json
+
+# Manter estrutura e metadados
+!results_archive/**/README.md
+!results_archive/**/VERSION
+
+# ============================================
+# Arquivos muito grandes (> 10MB) - Segurança extra
+# ============================================
+# Estes arquivos nunca devem ser commitados
+*.json.gz
+*.tar.gz
+*.zip

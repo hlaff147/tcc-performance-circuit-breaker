@@ -1,0 +1,24 @@
+# Versão atual do projeto TCC
+# Este arquivo é usado pelos scripts de automação para versionamento dos resultados
+PROJECT_VERSION=1.0.0
+
+# Descrição da versão
+VERSION_DESCRIPTION="Refatoração completa: camada de serviço, testes unitários/integração, métricas K6 padronizadas"
+
+# Data de criação
+VERSION_DATE="2024-12-06"
+
+# Changelog
+# v1.0.0 - Refatoração completa
+#   - Extração da camada de serviço (PaymentService) em V1 e V2
+#   - DTOs tipados (PaymentRequest, PaymentResponse)
+#   - Testes unitários com JUnit 5 e Mockito
+#   - Testes de integração com WireMock
+#   - Métricas K6 padronizadas com módulo compartilhado
+#   - Logging estruturado (JSON) com logback
+#   - Acquirer service com jitter e health check
+#
+# v0.0.1-SNAPSHOT - Versão inicial
+#   - Implementação básica V1 (baseline) e V2 (circuit breaker)
+#   - Scripts K6 para cenários de teste
+#   - Análise inicial com Python

@@ -37,12 +37,12 @@
 \maketitle
 
 \begin{resumo}
-Arquiteturas de microsserviços tornaram-se o padrão para construção de sistemas distribuídos escaláveis, porém a comunicação síncrona entre serviços introduz vulnerabilidades críticas: quando uma dependência downstream degrada ou falha, falhas em cascata podem se propagar por todo o sistema, levando à exaustão do pool de threads e indisponibilidade total do serviço. Embora o padrão Circuit Breaker seja amplamente recomendado como estratégia de mitigação, evidências empíricas quantificando sua eficácia em cenários realistas de falha permanecem escassas na literatura. Este trabalho preenche essa lacuna através de um estudo experimental controlado comparando uma arquitetura baseline contra uma protegida por Circuit Breaker (implementado com Resilience4j) em quatro cenários de estresse: falha catastrófica, degradação gradual, rajadas intermitentes e indisponibilidade extrema. Utilizando microsserviços orquestrados via Docker e testes de carga com k6 totalizando mais de 380.000 requisições por versão, foram medidos vazão, latência (p95) e taxas de sucesso. Os resultados demonstram que o Circuit Breaker proporciona ganhos substanciais de resiliência: no cenário de indisponibilidade extrema (75\% de downtime), as taxas de sucesso melhoraram de 10,14\% para 97,08\% (+86,94 pontos percentuais), representando uma redução de 96,77\% nas falhas. A análise estatística (teste de Mann-Whitney U, p $<$ 0,001; Cliff's Delta = 0,0155) confirma que esses benefícios vêm com overhead de desempenho negligível durante operação normal. Este estudo fornece evidência empírica reprodutível e um framework experimental reutilizável para avaliação de padrões de tolerância a falhas em arquiteturas de microsserviços síncronos.
+Arquiteturas de microsserviços tornaram-se o padrão para construção de sistemas distribuídos escaláveis, porém a comunicação síncrona entre serviços introduz vulnerabilidades críticas: quando uma dependência downstream degrada ou falha, falhas em cascata podem se propagar por todo o sistema, levando à exaustão do pool de threads e indisponibilidade total do serviço. Embora o padrão Circuit Breaker seja amplamente recomendado como estratégia de mitigação, evidências empíricas quantificando sua eficácia em cenários realistas de falha permanecem escassas na literatura. Este trabalho preenche essa lacuna através de um estudo experimental controlado comparando uma arquitetura baseline contra uma protegida por Circuit Breaker (implementado com Resilience4j) em quatro cenários de estresse: falha catastrófica, degradação gradual, rajadas intermitentes e indisponibilidade extrema. Utilizando microsserviços orquestrados via Docker e testes de carga com k6 totalizando mais de 769.000 requisições, foram medidos vazão, latência (p95/p99) e taxas de sucesso. Os resultados demonstram que o Circuit Breaker proporciona ganhos substanciais de resiliência: no cenário de indisponibilidade extrema (75\% de downtime), as taxas de sucesso melhoraram de 10,14\% para 97,08\% (+86,94 pontos percentuais), representando uma redução de 96,77\% nas falhas. Adicionalmente, o tempo médio de resposta reduziu de 735,05ms para 477,60ms (melhoria de 35\%), e a mediana caiu de 160,56ms para 35,69ms (melhoria de 78\%). A análise estatística (teste de Mann-Whitney U, p $<$ 0,001; Cliff's Delta = 0,38 --- efeito médio) confirma diferença significativa entre as versões. Este estudo fornece evidência empírica reprodutível e um framework experimental reutilizável para avaliação de padrões de tolerância a falhas em arquiteturas de microsserviços síncronos.
 \palavraschave{Microsserviços, Circuit Breaker, Resiliência, Tolerância a Falhas, Sistemas Distribuídos, Engenharia de Desempenho, Resilience4j}
 \end{resumo}
 
 \begin{abstract}
-Microservices architectures have become the standard for building scalable distributed systems, yet synchronous inter-service communication introduces critical vulnerabilities: when a downstream dependency degrades or fails, cascading failures can propagate throughout the entire system, leading to thread pool exhaustion and complete service unavailability. While the Circuit Breaker pattern is widely recommended as a mitigation strategy, empirical evidence quantifying its effectiveness under realistic failure scenarios remains scarce in the literature. This work addresses this gap by conducting a controlled experimental study comparing a baseline architecture against one protected by Circuit Breaker (implemented with Resilience4j) across four stress scenarios: catastrophic failure, gradual degradation, intermittent bursts, and extreme unavailability. Using Docker-orchestrated microservices and k6 load testing with over 380,000 requests per version, we measured throughput, latency (p95), and success rates. Results demonstrate that the Circuit Breaker delivers substantial resilience gains: in the extreme unavailability scenario (75\% downtime), success rates improved from 10.14\% to 97.08\% (+86.94 percentage points), representing a 96.77\% reduction in failures. Statistical analysis (Mann-Whitney U test, p $<$ 0.001; Cliff's Delta = 0.0155) confirms that these benefits come with negligible performance overhead during normal operation. This study provides reproducible empirical evidence and a reusable experimental framework for evaluating fault tolerance patterns in synchronous microservices architectures.
+Microservices architectures have become the standard for building scalable distributed systems, yet synchronous inter-service communication introduces critical vulnerabilities: when a downstream dependency degrades or fails, cascading failures can propagate throughout the entire system, leading to thread pool exhaustion and complete service unavailability. While the Circuit Breaker pattern is widely recommended as a mitigation strategy, empirical evidence quantifying its effectiveness under realistic failure scenarios remains scarce in the literature. This work addresses this gap by conducting a controlled experimental study comparing a baseline architecture against one protected by Circuit Breaker (implemented with Resilience4j) across four stress scenarios: catastrophic failure, gradual degradation, intermittent bursts, and extreme unavailability. Using Docker-orchestrated microservices and k6 load testing with over 769,000 total requests, we measured throughput, latency (p95/p99), and success rates. Results demonstrate that the Circuit Breaker delivers substantial resilience gains: in the extreme unavailability scenario (75\% downtime), success rates improved from 10.14\% to 97.08\% (+86.94 percentage points), representing a 96.77\% reduction in failures. Additionally, average response time decreased from 735.05ms to 477.60ms (35\% improvement), and median response time dropped from 160.56ms to 35.69ms (78\% improvement). Statistical analysis (Mann-Whitney U test, p $<$ 0.001; Cliff's Delta = 0.38 --- medium effect size) confirms significant difference between versions. This study provides reproducible empirical evidence and a reusable experimental framework for evaluating fault tolerance patterns in synchronous microservices architectures.
 \keywords{Microservices, Circuit Breaker, Resilience, Fault Tolerance, Distributed Systems, Performance Engineering, Resilience4j}
 \end{abstract}
 
@@ -451,14 +451,15 @@ Os testes de carga foram executados usando \texttt{k6} e \texttt{Docker Compose}
 \begin{table}[H]
 \centering
 \caption{Resumo Consolidado: Comparação V1 vs V2 em Todos os Cenários}
-\begin{tabular}{lcccccc}
+\label{tab:resumo-consolidado}
+\begin{tabular}{lccccc}
 \toprule
 Cenário & V1 Sucesso & V2 Sucesso & V2 Fallback & Ganho & Red. Falhas \\
 \midrule
-Catastrófica & 90.02\% & 94.49\% & 59.00\% & +4.47pp & -44.82\% \\
-Degradação & 94.72\% & 94.94\% & 0.00\% & +0.22pp & -4.23\% \\
-Indisponibilidade & 10.14\% & 97.08\% & 92.80\% & +86.94pp & -96.77\% \\
-Rajadas & 94.93\% & 95.21\% & 10.15\% & +0.28pp & -5.76\% \\
+Catastrófica & 90.0\% & 94.5\% & 59.0\% & +4.5pp & -44.8\% \\
+Degradação & 94.7\% & 94.9\% & 0.0\% & +0.2pp & -4.2\% \\
+Indisponibilidade & 10.1\% & 97.1\% & 92.8\% & +86.9pp & -96.8\% \\
+Rajadas & 94.9\% & 95.2\% & 10.2\% & +0.3pp & -5.8\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -478,8 +479,15 @@ Neste cenário, a API externa ficou 100\% indisponível durante 5 minutos consec
 
 \textbf{Comportamento Observado:}
 \begin{itemize}
-    \item \textbf{V1 (Baseline):} Durante o período de catástrofe, todas as requisições aguardaram o timeout (2s) antes de falhar, consumindo threads e degradando o sistema. A taxa de sucesso geral foi de 90.02\%.
-    \item \textbf{V2 (Circuit Breaker):} O CB detectou as falhas em menos de 10 segundos, abriu o circuito e passou a retornar respostas via fallback (HTTP 202) em menos de 100ms. A taxa de sucesso subiu para 94.49\%, com 59\% das respostas sendo fallbacks.
+    \item \textbf{V1 (Baseline):} Durante o período de catástrofe, todas as requisições aguardaram o timeout (2s) antes de falhar, consumindo threads e degradando o sistema. A taxa de sucesso geral foi de 90,0\%. O downtime total foi de 78 segundos.
+    \item \textbf{V2 (Circuit Breaker):} O CB detectou as falhas em menos de 10 segundos, abriu o circuito e passou a retornar respostas via fallback (HTTP 202) em menos de 100ms. A taxa de sucesso subiu para 94,5\%, com 59\% das respostas sendo fallbacks. O downtime foi reduzido para 43 segundos.
+\end{itemize}
+
+\textbf{Métricas de Performance:}
+\begin{itemize}
+    \item \textbf{Melhoria no Tempo de Resposta:} 60\% de redução no tempo médio
+    \item \textbf{Redução de Falhas:} 44,8\%
+    \item \textbf{Redução de Downtime:} 45\% (de 78s para 43s)
 \end{itemize}
 
 \begin{figure}[H]
@@ -506,7 +514,7 @@ Este cenário simula uma situação comum em produção: um serviço que começa
     \item \textbf{V2 (Circuit Breaker):} O CB detectou o aumento na taxa de falhas e latência, mantendo o sistema estável. Taxa de sucesso: 94.94\%, com fallback praticamente não acionado (0.0\%).
 \end{itemize}
 
-\textbf{Insight:} Neste cenário, o ganho foi marginal (+0.22pp) porque a degradação não foi severa o suficiente para acionar o CB consistentemente. Isso demonstra que o CB \textbf{não introduz overhead} em cenários de degradação moderada.
+\textbf{Insight:} Neste cenário, o ganho em taxa de sucesso foi marginal (+0,2pp), pois a degradação não foi severa o suficiente para acionar o CB consistentemente. Entretanto, a V2 ainda demonstrou ligeira melhoria no tempo de resposta (0,44\% mais rápido) e redução de 4,2\% nas falhas, confirmando que o CB \textbf{não introduz overhead} em cenários de degradação moderada e ainda oferece proteção incremental.
 
 \subsection{Análise do Cenário 3: Rajadas Intermitentes}
 
@@ -514,11 +522,11 @@ O cenário de rajadas é particularmente desafiador, pois exige que o sistema re
 
 \textbf{Comportamento Observado:}
 \begin{itemize}
-    \item \textbf{V1 (Baseline):} Durante cada rajada de 1 minuto, 100\% das requisições falharam. Nos períodos normais, o sistema se recuperou. Taxa geral: 94.93\%.
-    \item \textbf{V2 (Circuit Breaker):} O CB abriu durante as rajadas e fechou nos períodos normais, demonstrando \textbf{elasticidade}. Taxa geral: 95.21\%, com 10.15\% de fallbacks.
+    \item \textbf{V1 (Baseline):} Durante cada rajada de 1 minuto, 100\% das requisições falharam. Nos períodos normais, o sistema se recuperou. Taxa geral: 94,9\%.
+    \item \textbf{V2 (Circuit Breaker):} O CB abriu durante as rajadas e fechou nos períodos normais, demonstrando \textbf{elasticidade}. Taxa geral: 95,2\%, com 10,2\% de fallbacks. Melhoria de 10,8\% no tempo de resposta médio.
 \end{itemize}
 
-\textbf{Elasticidade do Circuit Breaker:} A capacidade do CB de transicionar entre estados (Fechado $\rightarrow$ Aberto $\rightarrow$ Semiaberto $\rightarrow$ Fechado) foi validada neste cenário. O tempo médio para abertura do circuito foi de ~8 segundos após o início de cada rajada.
+\textbf{Elasticidade do Circuit Breaker:} A capacidade do CB de transicionar entre estados (Fechado $\rightarrow$ Aberto $\rightarrow$ Semiaberto $\rightarrow$ Fechado) foi validada neste cenário. O tempo médio para abertura do circuito foi de ~8 segundos após o início de cada rajada. A redução de 5,8\% nas falhas demonstra a proteção oferecida mesmo em cenários de instabilidade.
 
 \subsection{Análise do Cenário 4: Indisponibilidade Extrema (75\% OFF)}
 
@@ -527,30 +535,51 @@ Este é o cenário mais extremo e onde o Circuit Breaker demonstrou seu valor m�
 \begin{table}[H]
 \centering
 \caption{Resultados Detalhados: Indisponibilidade Extrema}
+\label{tab:indisponibilidade-detalhes}
 \begin{tabular}{lcc}
 \toprule
 Métrica & V1 (Baseline) & V2 (Circuit Breaker) \\
 \midrule
-Total de Requisições & 69.252 & 76.967 \\
-Taxa de Sucesso Total & 10.14\% & 97.08\% \\
-Requisições via Fallback & N/A & 92.80\% \\
-Taxa de Falha Real & 89.86\% & 2.91\% \\
-Redução de Falhas & \textemdash & \textbf{96.77\%} \\
+Taxa de Sucesso Total & 10,14\% & 97,08\% \\
+Requisições via Fallback & N/A & 92,80\% \\
+Taxa de Falha Real & 89,86\% & 2,91\% \\
+Redução de Falhas & \textemdash & \textbf{96,77\%} \\
+\midrule
+Downtime (segundos) & 487,4s & 15,8s \\
+Disponibilidade Efetiva & 10,1\% & 97,1\% \\
+Melhoria P95 & \textemdash & \textbf{95,6\%} \\
+Melhoria Tempo Médio & \textemdash & \textbf{74,6\%} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \textbf{Comportamento Observado:}
 \begin{itemize}
-    \item \textbf{V1 (Baseline):} Com 75\% de indisponibilidade, o sistema se tornou praticamente inutilizável. Apenas 10.14\% das requisições foram bem-sucedidas, caracterizando \textbf{falha catastrófica do serviço}.
-    \item \textbf{V2 (Circuit Breaker):} O CB manteve o circuito aberto durante os períodos de indisponibilidade, servindo fallbacks e preservando a disponibilidade percebida pelo usuário em 97.08\%.
+    \item \textbf{V1 (Baseline):} Com 75\% de indisponibilidade, o sistema se tornou praticamente inutilizável. Apenas 10,14\% das requisições foram bem-sucedidas, caracterizando \textbf{falha catastrófica do serviço}. O downtime efetivo foi de \textbf{487 segundos} (mais de 8 minutos).
+    \item \textbf{V2 (Circuit Breaker):} O CB manteve o circuito aberto durante os períodos de indisponibilidade, servindo fallbacks e preservando a disponibilidade percebida pelo usuário em 97,08\%. O downtime foi reduzido para apenas \textbf{16 segundos}.
 \end{itemize}
+
+\textbf{Impacto Transformador:} Este cenário demonstra que o Circuit Breaker pode transformar um sistema \textbf{completamente inutilizável} (10\% de sucesso) em um sistema \textbf{altamente disponível} (97\% de sucesso), representando uma melhoria de quase \textbf{10x na disponibilidade percebida}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/11_downtime_availability.png}
+\caption{Comparação de Disponibilidade e Downtime por Cenário}
+\label{fig:downtime_availability}
+\end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{images/02_failure_reduction.png}
 \caption{Redução de Falhas: Impacto do Circuit Breaker por Cenário}
 \label{fig:failure_reduction}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/09_avg_response_times.png}
+\caption{Comparação de Tempos de Resposta Médios: V1 vs V2 por Cenário}
+\label{fig:avg_response_times}
 \end{figure}
 
 \subsection{Análise de Tempos de Resposta}
@@ -571,7 +600,25 @@ A análise dos percentis de tempo de resposta revela outro benefício crucial do
 \label{fig:distributions}
 \end{figure}
 
-A Figura \ref{fig:distributions} apresenta a distribuição estatística dos tempos de resposta para ambas as versões. Note a concentração de requisições em tempos baixos (mediana ~4ms) com uma cauda longa até os timeouts (~3000ms), característica comum em sistemas com dependências degradadas.
+A Figura \ref{fig:distributions} apresenta a distribuição estatística dos tempos de resposta para ambas as versões. Note a maior concentração de requisições em tempos baixos na V2, com mediana de apenas 35,69ms comparada aos 160,56ms da V1.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/05_status_distribution.png}
+\caption{Distribuição de Códigos de Status HTTP por Cenário}
+\label{fig:status_distribution}
+\end{figure}
+
+A Figura \ref{fig:status_distribution} mostra a distribuição de códigos de status HTTP para cada cenário. Observa-se claramente que a V2 substitui erros HTTP 500 por respostas HTTP 202 (fallback), mantendo o sistema funcional para o usuário final.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/10_error_rates.png}
+\caption{Comparação de Taxas de Erro: V1 vs V2 por Cenário}
+\label{fig:error_rates}
+\end{figure}
+
+A Figura \ref{fig:error_rates} evidencia a redução dramática nas taxas de erro proporcionada pelo Circuit Breaker, especialmente no cenário de indisponibilidade extrema onde a taxa de erro caiu de 89,9\% para apenas 2,9\%.
 
 \subsection{Contribuição do Mecanismo de Fallback}
 
@@ -616,35 +663,43 @@ Para validar estatisticamente a diferença entre as versões V1 e V2, aplicamos 
 \toprule
 Métrica & Valor \\
 \midrule
-N (V1) & 381.549 \\
-N (V2) & 383.071 \\
-Média (V1) & 612,23 ms \\
-Média (V2) & 605,94 ms \\
-Mediana (V1) & 4,38 ms \\
-Mediana (V2) & 4,26 ms \\
-Desvio Padrão (V1) & 1.201,49 ms \\
-Desvio Padrão (V2) & 1.197,94 ms \\
-P95 (V1) & 3.008,34 ms \\
-P95 (V2) & 3.008,00 ms \\
-P99 (V1) & 3.036,34 ms \\
-P99 (V2) & 3.030,40 ms \\
+N (V1) & 353.639 \\
+N (V2) & 415.927 \\
+Média (V1) & 735,05 ms \\
+Média (V2) & 477,60 ms \\
+Mediana (V1) & 160,56 ms \\
+Mediana (V2) & 35,69 ms \\
+Desvio Padrão (V1) & 1.085,40 ms \\
+Desvio Padrão (V2) & 952,68 ms \\
+P95 (V1) & 2.975,17 ms \\
+P95 (V2) & 2.745,21 ms \\
+P99 (V1) & 3.613,63 ms \\
+P99 (V2) & 2.977,47 ms \\
 \midrule
-Mann-Whitney U & 74.211.797.463,50 \\
-p-valor (Mann-Whitney) & 9,37e-32 \\
-Kolmogorov-Smirnov D & 0,0160 \\
-p-valor (KS) & 5,37e-43 \\
-Cliff's Delta ($\delta$) & 0,0155 \\
-Interpretação Effect Size & Negligível \\
-IC 95\% Diferença & [1,07; 11,77] ms \\
+Mann-Whitney U & 101.610.477.156,50 \\
+p-valor (Mann-Whitney) & $<$ 0,001 \\
+Kolmogorov-Smirnov D & 0,3490 \\
+p-valor (KS) & $<$ 0,001 \\
+Cliff's Delta ($\delta$) & 0,3816 \\
+Interpretação Effect Size & \textbf{Médio} \\
+IC 95\% Diferença & [252,84; 262,03] ms \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \textbf{Interpretação dos Resultados Estatísticos:}
 
-O teste de Mann-Whitney U revela uma diferença estatisticamente significativa entre V1 e V2 (p < 0,001), indicando que as distribuições de tempos de resposta são distintas. Contudo, o \textbf{Cliff's Delta} ($\delta = 0,0155$) classifica o \textit{effect size} como \textbf{negligível}, sugerindo que, embora a diferença seja estatisticamente detectável devido ao grande volume amostral, sua magnitude prática é mínima.
+O teste de Mann-Whitney U revela uma diferença estatisticamente significativa entre V1 e V2 (p $<$ 0,001), indicando que as distribuições de tempos de resposta são distintas. O \textbf{Cliff's Delta} ($\delta = 0,3816$) classifica o \textit{effect size} como \textbf{médio}, confirmando que a diferença observada possui relevância prática substancial.
 
-A diferença média estimada entre V1 e V2 é de aproximadamente 6,29 ms (IC 95\%: 1,07 a 11,77 ms), o que representa uma melhoria de apenas 1,03\% no tempo médio de resposta. Este resultado confirma que o Circuit Breaker \textbf{não introduz overhead perceptível} em operação normal, mantendo desempenho equivalente à versão Baseline enquanto proporciona benefícios substanciais em cenários de falha.
+As melhorias observadas são expressivas:
+\begin{itemize}
+    \item \textbf{Tempo médio de resposta:} Redução de 735,05ms para 477,60ms (\textbf{-35,0\%})
+    \item \textbf{Mediana:} Redução de 160,56ms para 35,69ms (\textbf{-77,8\%})
+    \item \textbf{P95:} Redução de 2.975,17ms para 2.745,21ms (\textbf{-7,7\%})
+    \item \textbf{P99:} Redução de 3.613,63ms para 2.977,47ms (\textbf{-17,6\%})
+\end{itemize}
+
+A diferença média estimada entre V1 e V2 é de aproximadamente 257 ms (IC 95\%: 252,84 a 262,03 ms), o que representa uma melhoria de \textbf{35\%} no tempo médio de resposta. Este resultado demonstra que o Circuit Breaker não apenas protege o sistema contra falhas, mas também \textbf{melhora significativamente o desempenho} ao evitar esperas por timeouts durante períodos de indisponibilidade.
 
 \subsection{Discussão Geral e Impacto do Circuit Breaker}
 
@@ -654,9 +709,30 @@ Os resultados experimentais validam inequivocamente a eficácia do padrão Circu
     \item \textbf{Prevenção de Falhas em Cascata:} O CB isolou o \texttt{servico-pagamento} das falhas do \texttt{servico-adquirente}, impedindo que a indisponibilidade se propagasse.
     \item \textbf{Degradação Graciosa:} Em vez de retornar erros HTTP 500, o sistema retornou HTTP 202 com uma mensagem útil ao usuário.
     \item \textbf{Proteção de Recursos:} O mecanismo fail-fast liberou threads rapidamente, evitando thread pool starvation.
-    \item \textbf{Overhead Zero em Cenários Normais:} A V2 apresentou desempenho praticamente idêntico à V1 em operação normal.
+    \item \textbf{Melhoria Significativa de Performance:} A V2 apresentou redução de 35\% no tempo médio de resposta e 78\% na mediana, demonstrando que o Circuit Breaker não apenas protege, mas também otimiza o sistema.
     \item \textbf{Elasticidade:} O CB demonstrou capacidade de abrir e fechar dinamicamente conforme o estado da dependência.
+    \item \textbf{Aumento de Throughput:} A V2 processou 17,6\% mais requisições (415.927 vs 353.639), evidenciando maior capacidade sob carga.
 \end{enumerate}
+
+\textbf{Impacto Quantificado:} A Tabela \ref{tab:impacto-quantificado} resume os principais ganhos proporcionados pelo Circuit Breaker.
+
+\begin{table}[H]
+\centering
+\caption{Impacto Quantificado do Circuit Breaker}
+\label{tab:impacto-quantificado}
+\begin{tabular}{lrrr}
+\toprule
+Métrica & V1 & V2 & Melhoria \\
+\midrule
+Tempo Médio de Resposta & 735,05 ms & 477,60 ms & \textbf{-35,0\%} \\
+Mediana de Resposta & 160,56 ms & 35,69 ms & \textbf{-77,8\%} \\
+P95 & 2.975 ms & 2.745 ms & \textbf{-7,7\%} \\
+P99 & 3.613 ms & 2.977 ms & \textbf{-17,6\%} \\
+Total de Requisições & 353.639 & 415.927 & \textbf{+17,6\%} \\
+Taxa de Falha (Indispon.) & 89,9\% & 2,9\% & \textbf{-96,8\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Conclusão}
 
@@ -667,21 +743,24 @@ Este trabalho se propôs a investigar a fragilidade da comunicação síncrona e
 Os resultados experimentais foram conclusivos e demonstraram de forma inequívoca o valor do padrão Circuit Breaker:
 
 \begin{itemize}
-    \item \textbf{Cenário de Indisponibilidade Extrema:} A V2 (Circuit Breaker) alcançou 97.08\% de sucesso contra apenas 10.14\% da V1 — um ganho de 86.94 pontos percentuais e redução de 96.77\% nas falhas.
-    \item \textbf{Cenário de Falha Catastrófica:} A V2 manteve 94.49\% de sucesso com 59\% das respostas via fallback, enquanto a V1 apresentou falhas massivas durante o período de indisponibilidade.
-    \item \textbf{Overhead Zero:} Em cenários de operação normal e degradação moderada, a V2 apresentou desempenho praticamente idêntico à V1, validando que o CB não introduz custos em ``céu azul''.
-    \item \textbf{Análise Estatística:} O teste de Mann-Whitney confirmou diferença significativa (p < 0.001), porém o Cliff's Delta ($\delta = 0.0155$) indica effect size negligível, evidenciando que a diferença prática é mínima (~6ms ou 1.03\%).
+    \item \textbf{Cenário de Indisponibilidade Extrema:} A V2 (Circuit Breaker) alcançou 97,08\% de sucesso contra apenas 10,14\% da V1 — um ganho de \textbf{86,94 pontos percentuais} e redução de \textbf{96,77\%} nas falhas.
+    \item \textbf{Cenário de Falha Catastrófica:} A V2 manteve 94,5\% de sucesso com 59\% das respostas via fallback, enquanto a V1 apresentou falhas massivas durante o período de indisponibilidade (redução de 44,8\% nas falhas).
+    \item \textbf{Melhoria de Performance:} O tempo médio de resposta reduziu de 735,05ms para 477,60ms (\textbf{-35\%}), e a mediana caiu de 160,56ms para 35,69ms (\textbf{-78\%}).
+    \item \textbf{Aumento de Capacidade:} A V2 processou 17,6\% mais requisições (415.927 vs 353.639), demonstrando que o mecanismo fail-fast libera recursos e aumenta o throughput.
+    \item \textbf{Análise Estatística:} O teste de Mann-Whitney confirmou diferença significativa (p $<$ 0,001), e o Cliff's Delta ($\delta = 0,38$) indica \textbf{effect size médio}, confirmando relevância prática substancial.
     \item \textbf{Elasticidade:} O CB demonstrou capacidade de transicionar dinamicamente entre estados conforme o comportamento da dependência.
 \end{itemize}
 
-A arquitetura Baseline (V1) provou ser \textbf{inviável para produção} em sistemas de missão crítica, enquanto a V2 (Circuit Breaker) demonstrou robustez absoluta, protegendo o \texttt{servico-pagamento}, mantendo vazão estável e garantindo disponibilidade percebida pelo usuário através da degradação graciosa (HTTP 202).
+A arquitetura Baseline (V1) provou ser \textbf{inadequada para produção} em sistemas de missão crítica, enquanto a V2 (Circuit Breaker) demonstrou robustez excepcional, protegendo o \texttt{servico-pagamento}, mantendo vazão estavel e garantindo disponibilidade percebida pelo usuário através da degradação graciosa (HTTP 202). Os resultados são particularmente relevantes para sistemas financeiros, e-commerce e qualquer domínio onde a disponibilidade é requisito crítico.
 
 \subsection{Contribuições do Trabalho}
 Este TCC contribui para a literatura ao fornecer:
 \begin{enumerate}
-    \item \textbf{Evidência Empírica:} Dados quantitativos que demonstram o impacto real do Circuit Breaker em cenários realistas de falha.
+    \item \textbf{Evidência Empírica Robusta:} Dados quantitativos que demonstram o impacto real do Circuit Breaker em cenários realistas de falha, com mais de 769.000 requisições analisadas.
+    \item \textbf{Análise Estatística Rigorosa:} Aplicação de testes não-paramétricos (Mann-Whitney U, Kolmogorov-Smirnov) e medidas de effect size (Cliff's Delta = 0,38) que confirmam relevância prática substancial.
     \item \textbf{Metodologia Reprodutível:} Um framework de testes com Docker e k6 que pode ser replicado para avaliar outros padrões de resiliência.
-    \item \textbf{Análise Multidimensional:} Avaliação não apenas de taxa de sucesso, mas também de latência, throughput e comportamento temporal do sistema.
+    \item \textbf{Análise Multidimensional:} Avaliação não apenas de taxa de sucesso, mas também de latência (média, mediana, P95, P99), throughput, downtime e comportamento temporal do sistema.
+    \item \textbf{Quantificação de Benefícios:} Demonstração de melhorias de até 86,94pp em taxa de sucesso, 35\% em tempo médio de resposta e 78\% na mediana.
 \end{enumerate}
 
 \subsection{Limitações do Estudo}

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Propriedades do serviço para incluir nos logs -->
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="payment-service-v2"/>
+    <springProperty scope="context" name="appVersion" source="app.version" defaultValue="2.0.0"/>
+    
+    <!-- Appender para desenvolvimento local (formato legível) -->
+    <appender name="CONSOLE_DEV" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <!-- Appender JSON para Docker/Produção -->
+    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>customerId</includeMdcKeyName>
+            <includeMdcKeyName>cbState</includeMdcKeyName>
+            
+            <!-- Campos customizados fixos -->
+            <customFields>{"service":"${appName}","version":"${appVersion}","experiment":"circuit-breaker-tcc"}</customFields>
+            
+            <!-- Formato de timestamp ISO 8601 -->
+            <timestampPattern>yyyy-MM-dd'T'HH:mm:ss.SSSZ</timestampPattern>
+            
+            <!-- Incluir informações de exceção formatadas -->
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                <maxLength>2048</maxLength>
+                <shortenedClassNameLength>20</shortenedClassNameLength>
+                <rootCauseFirst>true</rootCauseFirst>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- Profile: Desenvolvimento local -->
+    <springProfile name="default,local,dev">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_DEV"/>
+        </root>
+        
+        <logger name="br.ufpe.cin.tcc" level="DEBUG"/>
+        <logger name="io.github.resilience4j" level="DEBUG"/>
+    </springProfile>
+    
+    <!-- Profile: Docker/Produção (logs JSON) -->
+    <springProfile name="docker,prod,production">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_JSON"/>
+        </root>
+        
+        <logger name="br.ufpe.cin.tcc" level="INFO"/>
+        <logger name="io.github.resilience4j" level="INFO"/>
+        
+        <!-- Reduzir ruído de frameworks -->
+        <logger name="org.springframework" level="WARN"/>
+        <logger name="org.apache" level="WARN"/>
+        <logger name="com.netflix" level="WARN"/>
+    </springProfile>
+    
+    <!-- Profile: Testes -->
+    <springProfile name="test">
+        <root level="WARN">
+            <appender-ref ref="CONSOLE_DEV"/>
+        </root>
+        
+        <logger name="br.ufpe.cin.tcc" level="DEBUG"/>
+        <logger name="io.github.resilience4j" level="DEBUG"/>
+    </springProfile>
+</configuration>

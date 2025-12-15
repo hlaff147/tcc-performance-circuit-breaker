@@ -1,8 +1,17 @@
 server:
   port: 8080
 
+spring:
+  application:
+    name: payment-service-v2
+
 resilience4j:
   circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        # Métricas detalhadas para Prometheus
+        eventConsumerBufferSize: 100
     instances:
       adquirente-cb:
         # CONFIGURAÇÃO OTIMIZADA PARA ALTA DISPONIBILIDADE
@@ -33,28 +42,47 @@ resilience4j:
         # Transição automática de half-open para closed se taxa de sucesso > 50%
         automaticTransitionFromOpenToHalfOpenEnabled: true
         
+        # Registro de exceções que contam como falha
+        recordExceptions:
+          - java.net.SocketTimeoutException
+          - java.net.ConnectException
+          - java.io.IOException
+          - feign.FeignException
+          - org.springframework.web.client.HttpServerErrorException
+        
   timelimiter:
     instances:
       adquirente-cb:
         # Timeout generoso: 3s (permite API lenta se recuperar)
         timeoutDuration: 3000ms
+        cancelRunningFuture: true
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,circuitbreakers,metrics,prometheus
+        include: health,info,circuitbreakers,circuitbreakerevents,metrics,prometheus
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
     prometheus:
+      enabled: true
+    circuitbreakers:
       enabled: true
   health:
     circuitbreakers:
       enabled: true
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
   metrics:
     tags:
       application: payment-service-v2
+      version: v2
+      experiment: circuit-breaker-tcc
     export:
       prometheus:
         enabled: true
@@ -62,6 +90,10 @@ management:
       percentiles-histogram:
         http.server.requests: true
         resilience4j.circuitbreaker.calls: true
+        payment.processing.time: true
       percentiles:
         http.server.requests: 0.5, 0.9, 0.95, 0.99
         resilience4j.circuitbreaker.calls: 0.5, 0.9, 0.95, 0.99
+        payment.processing.time: 0.5, 0.9, 0.95, 0.99
+      slo:
+        http.server.requests: 100ms, 200ms, 500ms, 1s, 2s, 5s
