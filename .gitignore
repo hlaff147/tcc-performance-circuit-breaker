@@ -46,6 +46,10 @@ yarn-error.log*
 k6/results/*.json
 k6/results/scenarios/*.json
 
+# Experimentos comparativos (v2.0.0) - arquivos grandes
+k6/results/comparative/**/*.json
+!k6/results/comparative/**/*_summary.json
+
 # Manter apenas os arquivos de resumo (pequenos, ~8KB cada)
 !k6/results/*_summary.json
 !k6/results/scenarios/*_summary.json

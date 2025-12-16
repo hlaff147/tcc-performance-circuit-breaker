@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 FROM maven:3.8.7-eclipse-temurin-17 AS builder
 WORKDIR /workspace
 
