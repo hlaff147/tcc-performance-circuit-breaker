@@ -6,6 +6,7 @@ volumes:
   prometheus-data:
   grafana-data:
 
+
 services:
   # --- 1. APLICAÇÃO ---
 
@@ -17,7 +18,7 @@ services:
     ports:
       - "8081:8081"
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8081/actuator/health"]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8081/actuator/health" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -44,7 +45,7 @@ services:
       servico-adquirente:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/actuator/health"]
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/actuator/health" ]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -62,13 +63,73 @@ services:
     # IMPORTANTE: Este serviço deve ter as dependências do Actuator e Prometheus:
     # 'spring-boot-starter-actuator' e 'micrometer-registry-prometheus'
 
+    # V2 - Circuit Breaker (Resilience4j)
+  servico-pagamento-v2:
+    build:
+      context: ./services/payment-service-v2
+      dockerfile: Dockerfile
+      args:
+        - CB_PROFILE=${CB_PROFILE:-equilibrado}
+    container_name: servico-pagamento-v2
+    ports:
+      - "8082:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${CB_PROFILE:-equilibrado}
+    depends_on:
+      servico-adquirente:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - tcc-network
+
+  # V3 - Retry com Backoff Exponencial
+  servico-pagamento-v3:
+    build:
+      context: ./services/payment-service-v3
+      dockerfile: Dockerfile
+    container_name: servico-pagamento-v3
+    ports:
+      - "8083:8080"
+    depends_on:
+      servico-adquirente:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - tcc-network
+
   # --- 2. ECOSSISTEMA DE TESTE E MONITORAMENTO ---
 
   k6-tester:
     image: grafana/k6:latest
     container_name: k6-tester
-    entrypoint: ["/bin/sh"]
-    command: ["-c", "while true; do sleep 3600; done"]
+    entrypoint: [ "/bin/sh" ]
+    command: [ "-c", "while true; do sleep 3600; done" ]
     volumes:
       - ./k6/scripts:/scripts # Mapeia os scripts k6
       - ./k6/results:/scripts/results # Mapeia a pasta de resultados
