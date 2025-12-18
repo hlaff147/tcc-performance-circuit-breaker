@@ -51,6 +51,7 @@ class ScenarioAnalyzer:
         
         self.data = {}
         self.summary = {}
+        self.benefits = None
         self.test_duration_seconds = None
         
     def load_data(self):

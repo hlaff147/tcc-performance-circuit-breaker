@@ -1,0 +1,30 @@
+\begin{longtable}{lllrrl}
+\caption{Resultados do Teste U de Mann-Whitney.} \label{tab:mann_whitney_results} \\
+\toprule
+scenario & metric & comparison & statistic & p_value & significant_at_5% \\
+\midrule
+\endfirsthead
+\caption[]{Resultados do Teste U de Mann-Whitney.} \\
+\toprule
+scenario & metric & comparison & statistic & p_value & significant_at_5% \\
+\midrule
+\endhead
+\midrule
+\multicolumn{6}{r}{Continued on next page} \\
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+falha-catastrofica & avg_duration_ms & v2 vs v1 & 0.0000 & 0.0079 & Sim \\
+falha-catastrofica & avg_duration_ms & v2 vs v3 & 0.0000 & 0.0079 & Sim \\
+falha-catastrofica & avg_duration_ms & v2 vs v4 & 5.0000 & 0.1508 & Não \\
+falha-catastrofica & success_rate & v2 vs v1 & 12.5000 & 1.0000 & Não \\
+falha-catastrofica & success_rate & v2 vs v3 & 12.5000 & 1.0000 & Não \\
+falha-catastrofica & success_rate & v2 vs v4 & 12.5000 & 1.0000 & Não \\
+indisponibilidade-extrema & avg_duration_ms & v2 vs v1 & 0.0000 & 0.0079 & Sim \\
+indisponibilidade-extrema & avg_duration_ms & v2 vs v3 & 0.0000 & 0.0079 & Sim \\
+indisponibilidade-extrema & avg_duration_ms & v2 vs v4 & 0.0000 & 0.0079 & Sim \\
+indisponibilidade-extrema & success_rate & v2 vs v1 & 12.5000 & 1.0000 & Não \\
+indisponibilidade-extrema & success_rate & v2 vs v3 & 12.5000 & 1.0000 & Não \\
+indisponibilidade-extrema & success_rate & v2 vs v4 & 12.5000 & 1.0000 & Não \\
+\end{longtable}

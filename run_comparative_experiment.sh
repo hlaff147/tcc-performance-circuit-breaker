@@ -18,6 +18,7 @@
 # ==============================================================================
 
 set -e
+set -o pipefail
 
 # Configuração padrão
 TREATMENTS=("v1" "v2" "v3" "v4")
@@ -35,6 +36,31 @@ if grep -qi microsoft /proc/version 2>/dev/null || grep -qi wsl /proc/version 2>
     USE_LOCAL_K6=true
     echo "🐧 WSL detectado - usando k6 local"
 fi
+
+# Detectar docker-compose vs docker compose
+COMPOSE_MODE="docker-compose"
+if ! command -v docker-compose >/dev/null 2>&1; then
+    if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+        COMPOSE_MODE="docker compose"
+    else
+        echo "❌ docker-compose não encontrado (nem 'docker compose')."
+        exit 1
+    fi
+fi
+
+compose() {
+    if [ "$COMPOSE_MODE" = "docker-compose" ]; then
+        docker-compose "$@"
+    else
+        docker compose "$@"
+    fi
+}
+
+cleanup() {
+    # Garante que não vai deixar containers subindo após Ctrl+C/erro
+    compose down --remove-orphans > /dev/null 2>&1 || true
+}
+trap cleanup EXIT INT TERM
 
 # Parse argumentos
 PILOT_MODE=false
@@ -119,19 +145,41 @@ echo "  Repetições: $REPLICATIONS" >> "$LOG_FILE"
 echo "  Modo k6: $(if [ "$USE_LOCAL_K6" = true ]; then echo 'local'; else echo 'docker'; fi)" >> "$LOG_FILE"
 echo "" >> "$LOG_FILE"
 
+# Validar existência dos scripts k6 antes de começar (evita rodar metade do experimento)
+for scenario in "${SCENARIOS[@]}"; do
+    script_path="$K6_SCRIPTS_DIR/cenario-${scenario}.js"
+    if [ ! -f "$script_path" ]; then
+        echo "❌ Script k6 não encontrado para cenário '$scenario': $script_path" | tee -a "$LOG_FILE"
+        exit 1
+    fi
+done
+
+
 # Função para verificar se serviço está saudável
 wait_for_healthy() {
-    local max_attempts=30
+    local max_attempts=${HEALTH_MAX_ATTEMPTS:-60}
     local attempt=1
+    local health_url=${HEALTH_URL:-http://localhost:8080/actuator/health}
+    local sleep_seconds=${HEALTH_SLEEP_SECONDS:-2}
     
-    echo -n "  Aguardando serviço ficar saudável"
+    echo -n "  Aguardando serviço ficar saudável (${health_url})"
     while [ $attempt -le $max_attempts ]; do
-        if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
+        # Falha rápida se o container morreu
+        if docker inspect -f '{{.State.Status}}' servico-pagamento > /dev/null 2>&1; then
+            status=$(docker inspect -f '{{.State.Status}}' servico-pagamento 2>/dev/null || true)
+            if [ "$status" != "running" ]; then
+                echo -e " ${RED}FALHOU${NC}"
+                echo "  Container servico-pagamento está '$status'" | tee -a "$LOG_FILE"
+                return 1
+            fi
+        fi
+
+        if curl -sf "$health_url" > /dev/null 2>&1; then
             echo -e " ${GREEN}OK${NC}"
             return 0
         fi
         echo -n "."
-        sleep 2
+        sleep "$sleep_seconds"
         ((attempt++))
     done
     
@@ -158,9 +206,10 @@ run_test_local() {
         --out json="$output_file" \
         --summary-export="$summary_file" \
         --env TREATMENT="$treatment_name" \
+        --env VERSION="$treatment" \
         --env RUN="$run" \
         --env SEED="$seed" \
-        --env BASE_URL="http://localhost:8080" \
+        --env PAYMENT_BASE_URL="http://localhost:8080" \
         "$script_path" >> "$LOG_FILE" 2>&1
     
     local exit_code=$?
@@ -187,8 +236,10 @@ run_test_docker() {
         --out json=/scripts/results/comparative/experiment_$TIMESTAMP/${scenario}_${treatment}_run${run}.json \
         --summary-export=/scripts/results/comparative/experiment_$TIMESTAMP/${scenario}_${treatment}_run${run}_summary.json \
         --env TREATMENT=$treatment_name \
+        --env VERSION=$treatment \
         --env RUN=$run \
         --env SEED=$seed \
+        --env PAYMENT_BASE_URL=http://servico-pagamento:8080 \
         /scripts/cenario-${scenario}.js >> "$LOG_FILE" 2>&1
     
     return $?
@@ -220,6 +271,8 @@ echo -e "${BLUE}Total de runs: $total_runs${NC}"
 echo ""
 
 # Loop principal do experimento
+skipped_treatments=()
+
 for scenario in "${SCENARIOS[@]}"; do
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${BLUE}CENÁRIO: $scenario${NC}"
@@ -234,22 +287,45 @@ for scenario in "${SCENARIOS[@]}"; do
         echo "  Iniciando ambiente..."
         
         # Parar containers anteriores
-        docker-compose down --remove-orphans > /dev/null 2>&1 || true
+        compose down --remove-orphans > /dev/null 2>&1 || true
         
         # Iniciar com o tratamento correto
         echo "  Construindo e iniciando serviços (version=$treatment)..."
         services=$(get_services)
         if [ -n "$services" ]; then
-            PAYMENT_SERVICE_VERSION=$treatment docker-compose up -d --build $services >> "$LOG_FILE" 2>&1
+            if ! PAYMENT_SERVICE_VERSION=$treatment compose up -d --build $services >> "$LOG_FILE" 2>&1; then
+                echo -e "${RED}ERRO: Falha ao buildar/subir serviços (version=$treatment)${NC}"
+                echo "  Detalhes em: $LOG_FILE"
+                echo "---- últimas linhas do log ----"
+                tail -n 60 "$LOG_FILE" 2>/dev/null || true
+                skipped_treatments+=("${scenario}:${treatment}:compose_up_failed")
+                compose down --remove-orphans > /dev/null 2>&1 || true
+                continue
+            fi
         else
-            PAYMENT_SERVICE_VERSION=$treatment docker-compose up -d --build >> "$LOG_FILE" 2>&1
+            if ! PAYMENT_SERVICE_VERSION=$treatment compose up -d --build >> "$LOG_FILE" 2>&1; then
+                echo -e "${RED}ERRO: Falha ao buildar/subir serviços (version=$treatment)${NC}"
+                echo "  Detalhes em: $LOG_FILE"
+                echo "---- últimas linhas do log ----"
+                tail -n 60 "$LOG_FILE" 2>/dev/null || true
+                skipped_treatments+=("${scenario}:${treatment}:compose_up_failed")
+                compose down --remove-orphans > /dev/null 2>&1 || true
+                continue
+            fi
         fi
         
         # Aguardar serviço ficar saudável
         if ! wait_for_healthy; then
             echo -e "${RED}ERRO: Serviço não iniciou corretamente${NC}"
-            echo "  Ver logs: docker-compose logs servico-pagamento"
-            docker-compose logs servico-pagamento >> "$LOG_FILE" 2>&1
+            echo "  Ver logs: compose logs servico-pagamento"
+            echo "---- compose ps ----" >> "$LOG_FILE"
+            compose ps >> "$LOG_FILE" 2>&1 || true
+            echo "---- logs servico-adquirente (tail) ----" >> "$LOG_FILE"
+            compose logs --tail=80 servico-adquirente >> "$LOG_FILE" 2>&1 || true
+            echo "---- logs servico-pagamento (tail) ----" >> "$LOG_FILE"
+            compose logs --tail=200 servico-pagamento >> "$LOG_FILE" 2>&1 || true
+            skipped_treatments+=("${scenario}:${treatment}")
+            compose down --remove-orphans > /dev/null 2>&1 || true
             continue
         fi
         
@@ -264,11 +340,16 @@ for scenario in "${SCENARIOS[@]}"; do
             
             echo ""
             echo -e "  ${YELLOW}Run $run/$REPLICATIONS (seed=$seed) [$current_run/$total_runs]${NC}"
-            
-            if run_test "$treatment" "$treatment_name" "$scenario" "$run" "$seed"; then
+
+            exit_code=0
+            run_test "$treatment" "$treatment_name" "$scenario" "$run" "$seed" || exit_code=$?
+
+            if [ $exit_code -eq 0 ]; then
                 echo -e "  ${GREEN}✓ Concluído${NC}"
+            elif [ $exit_code -eq 99 ]; then
+                echo -e "  ${YELLOW}⚠ Thresholds violados (k6 exit 99)${NC}"
             else
-                echo -e "  ${RED}✗ Falhou${NC}"
+                echo -e "  ${RED}✗ Erro (exit $exit_code)${NC}"
             fi
             
             # Cooldown entre runs
@@ -279,7 +360,7 @@ for scenario in "${SCENARIOS[@]}"; do
         done
         
         echo "  Parando containers..."
-        docker-compose down > /dev/null 2>&1
+        compose down > /dev/null 2>&1
     done
 done
 
@@ -290,6 +371,16 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 echo -e "Resultados salvos em: ${GREEN}$EXPERIMENT_DIR${NC}"
 echo ""
+
+if [ ${#skipped_treatments[@]} -gt 0 ]; then
+    echo -e "${YELLOW}Atenção: alguns tratamentos foram pulados por falha de inicialização:${NC}"
+    for item in "${skipped_treatments[@]}"; do
+        echo "  - $item"
+    done
+    echo "Detalhes em: $LOG_FILE"
+    echo ""
+fi
+
 echo "Próximos passos:"
 echo "  1. Analisar resultados: python3 analysis/scripts/comparative_analyzer.py $EXPERIMENT_DIR"
 echo "  2. Gerar relatório: python3 analysis/scripts/generate_comparative_report.py $EXPERIMENT_DIR"

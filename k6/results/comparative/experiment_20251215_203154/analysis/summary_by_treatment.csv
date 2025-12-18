@@ -1,7 +1,0 @@
-scenario,treatment,total_requests_mean,total_requests_std,success_rate_mean,success_rate_std,avg_duration_ms_mean,avg_duration_ms_std,p95_duration_ms_mean,p95_duration_ms_std,p99_duration_ms_mean,p99_duration_ms_std
-falha-catastrofica,v1,62060.0,,0.0,,254.26,,2484.59,,0.0,
-falha-catastrofica,v2,63190.0,,0.0,,232.62,,2449.24,,0.0,
-falha-catastrofica,v4,62386.0,,0.0,,248.73,,2486.51,,0.0,
-indisponibilidade-extrema,v1,70120.0,,0.0,,140.94,,2003.41,,0.0,
-indisponibilidade-extrema,v2,77806.0,,0.0,,28.52,,20.63,,0.0,
-indisponibilidade-extrema,v4,70800.0,,0.0,,132.19,,185.65,,0.0,
