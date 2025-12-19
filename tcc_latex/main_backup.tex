@@ -136,7 +136,7 @@ Este TCC preenche essa lacuna ao \textbf{implementar} uma POC (Prova de Conceito
 \textbf{Objetivos Específicos.}
 \begin{enumerate}
     \item Implementar uma POC simplificada composta por \texttt{servico-pagamento} e \texttt{servico-adquirente}, utilizando Spring Boot, Spring Cloud OpenFeign e orquestração via Docker.
-    \item Desenvolver múltiplas versões do \texttt{servico-pagamento}: (V1) Baseline com timeouts básicos, (V2) com Resilience4j, Circuit Breaker e fallback, e (V3) com Circuit Breaker + Time Limiter para análise de cenários de latência.
+    \item Desenvolver duas versões do \texttt{servico-pagamento}: (V1) Baseline com timeouts básicos e (V2) com Resilience4j, Circuit Breaker e fallback.
     \item Construir e executar benchmarks automatizados com k6 para simular cenários de falha universais: indisponibilidade total, degradação gradual, rajadas intermitentes e indisponibilidade prolongada.
     \item Analisar comparativamente as métricas de vazão, latência e taxa de erro, destacando os benefícios e custos da adoção do Circuit Breaker.
 \end{enumerate}
@@ -260,7 +260,6 @@ O código HTTP 202 (Accepted) é particularmente importante pois representa a \t
 \begin{itemize}
     \item \textbf{V1: Baseline (Controle):} implementação ingênua que apenas configura timeouts curtos (por exemplo, 2 segundos) no Feign Client para conexão e leitura.
     \item \textbf{V2: Circuit Breaker + Fallback:} implementação robusta com Resilience4j. O Circuit Breaker é configurado para abrir após detectar, por exemplo, 50\% de falhas em uma janela de requisições. Quando o circuito está aberto, um método de fallback devolve HTTP 202 (Accepted) com a mensagem "Pagamento recebido e agendado para processamento posterior.", caracterizando a degradação graciosa.
-    \item \textbf{V3: Circuit Breaker + Time Limiter:} extensão da V2 que adiciona um limite de tempo (\textit{Time Limiter}) às chamadas. Requisições que excedem o timeout configurado são automaticamente interrompidas, forçando falhas que contribuem para a abertura do circuito. Essa configuração é particularmente eficaz em cenários de latência elevada, onde a dependência responde lentamente mas não falha explicitamente.
 \end{itemize}
 
 \subsubsection{Variáveis Dependentes — Métricas coletadas via k6}
@@ -268,7 +267,6 @@ O código HTTP 202 (Accepted) é particularmente importante pois representa a \t
     \item \textbf{\texttt{http\_reqs}:} número total de requisições processadas, utilizado como medida de vazão.
     \item \textbf{\texttt{http\_req\_duration\{p(95)\}}:} percentil 95 do tempo de resposta, indicador de latência sob carga.
     \item \textbf{\texttt{http\_req\_failed}:} taxa de requisições consideradas falhas pelo k6, refletindo a resiliência percebida.
-    \item \textbf{Coeficiente de Variação (CV):} razão entre o desvio padrão e a média do tempo de resposta, utilizada para medir a consistência e previsibilidade do sistema. Valores menores indicam maior estabilidade.
 \end{itemize}
 
 \subsection{Plano de Execução — Cenários de Teste k6}
@@ -387,59 +385,9 @@ Quatro cenários de teste foram desenvolvidos em k6, cada um projetado para exer
     \item \textbf{Thresholds:} \texttt{http\_req\_duration\{p(95)\} < 1200ms} e \texttt{http\_req\_failed < 0.25}.
 \end{itemize}
 
-\subsubsection{Cenário 5 — Recuperação Pós-Falha}
-
-\textbf{Contexto Real:} Este cenário avalia a capacidade de auto-recuperação do sistema após períodos de indisponibilidade. É crítico para validar que o Circuit Breaker não apenas protege durante falhas, mas também permite a retomada automática do serviço quando a dependência volta ao normal.
-
-\begin{itemize}
-    \item \textbf{Descrição:} O teste inicia com uma fase de falhas para forçar a abertura do Circuit Breaker, seguida por um período de normalização do serviço dependente.
-    
-    \item \textbf{Fases do Teste (10 minutos):}
-    \begin{enumerate}
-        \item \textbf{Operação Normal} (0-2min): 100 VUs, funcionamento saudável para estabelecer baseline.
-        \item \textbf{FALHA FORÇADA} (2-5min): 150 VUs, 100\% de falhas para forçar abertura do CB.
-        \item \textbf{RECUPERAÇÃO} (5-8min): 150 VUs, serviço dependente volta a operar normalmente.
-        \item \textbf{Estabilização} (8-10min): 100 VUs, validar retorno completo à operação normal.
-    \end{enumerate}
-    
-    \item \textbf{Comportamento Esperado:}
-    \begin{itemize}
-        \item \textit{V1 (Baseline):} Não possui mecanismo de recuperação automática; depende de reinicializações ou intervenção manual.
-        \item \textit{V2 (Circuit Breaker):} Após \texttt{waitDurationInOpenState} (10s), transita para SEMI-ABERTO, permite requisições de teste, e fecha o circuito automaticamente ao confirmar sucesso.
-    \end{itemize}
-    
-    \item \textbf{Objetivo:} Medir o tempo de recuperação do CB e validar a transição automática entre estados (ABERTO $\rightarrow$ SEMI-ABERTO $\rightarrow$ FECHADO).
-\end{itemize}
-
-\subsubsection{Cenário 6 — Falhas Intermitentes com Latência (V3)}
-
-\textbf{Contexto Real:} Este cenário é projetado especificamente para demonstrar o valor da versão V3 (com Time Limiter). Simula uma dependência que alterna entre respostas normais, respostas lentas e falhas explícitas — um padrão comum em serviços sobrecarregados.
-
-\begin{itemize}
-    \item \textbf{Descrição:} Combina falhas intermitentes com períodos de alta latência, testando a eficácia do Time Limiter em forçar a abertura do circuito quando a dependência está lenta mas não falhando explicitamente.
-    
-    \item \textbf{Fases do Teste (12 minutos):}
-    \begin{enumerate}
-        \item \textbf{Aquecimento} (0-1min): 80 VUs, operação normal.
-        \item \textbf{Latência Elevada} (1-4min): 120 VUs, 70\% das respostas com 3s de latência.
-        \item \textbf{Falhas Mistas} (4-7min): 150 VUs, 40\% falhas + 40\% latência + 20\% normal.
-        \item \textbf{Recuperação Gradual} (7-10min): 120 VUs, melhora progressiva.
-        \item \textbf{Cooldown} (10-12min): Encerramento.
-    \end{enumerate}
-    
-    \item \textbf{Comportamento Esperado:}
-    \begin{itemize}
-        \item \textit{V1 (Baseline):} Sofre com latência acumulada; threads bloqueadas aguardando respostas lentas.
-        \item \textit{V2 (Circuit Breaker):} Não abre o circuito apenas por lentidão se não houver falhas explícitas.
-        \item \textit{V3 (CB + Time Limiter):} O Time Limiter interrompe requisições lentas, gerando falhas que acionam o CB. Demonstra proteção superior em cenários de latência.
-    \end{itemize}
-    
-    \item \textbf{Objetivo:} Validar que a combinação CB + Time Limiter oferece proteção mais completa que o CB isolado, especialmente em cenários de degradação de latência.
-\end{itemize}
-
 \subsubsection{Resumo Comparativo dos Cenários}
 
-A Tabela \ref{tab:cenarios-resumo} apresenta uma visão consolidada dos cenários, destacando suas características distintivas e o propósito de cada um no experimento.
+A Tabela \ref{tab:cenarios-resumo} apresenta uma visão consolidada dos quatro cenários, destacando suas características distintivas e o propósito de cada um no experimento.
 
 \begin{table}[H]
 \centering
@@ -453,8 +401,6 @@ Catastrófica & 13min & 50-150 & 100\% falha por 5min & Fail-fast \\
 Degradação & 13min & 100-200 & 5\% → 50\% gradual & Detecção precoce \\
 Rajadas & 13min & 100-200 & 3× (100\% por 1min) & Elasticidade \\
 Indisponibilidade & 9min & 80-200 & 75\% offline & Ganho máximo \\
-Recuperação & 10min & 100-150 & Falha → Normal & Auto-recuperação \\
-Latência (V3) & 12min & 80-150 & 70\% lento + 40\% falha & Time Limiter \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -659,28 +605,6 @@ A Figura \ref{fig:distributions} apresenta a distribuição estatística dos tem
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.85\textwidth]{images/distribution_boxplot.png}
-\caption{Distribuição do Tempo de Resposta (Box Plot) por Cenário}
-\label{fig:distribution-boxplot}
-\end{figure}
-
-\subsubsection{Análise de Consistência e Variabilidade}
-
-Além das métricas tradicionais de latência, foi calculado o \textbf{Coeficiente de Variação (CV)} para cada cenário, definido como a razão entre o desvio padrão e a média do tempo de resposta. Esta métrica quantifica a \textbf{previsibilidade} do sistema — valores menores indicam comportamento mais consistente.
-
-A análise revelou que a V2 (Circuit Breaker) apresenta CV significativamente menor em cenários adversos:
-
-\begin{itemize}
-    \item \textbf{Cenário de Indisponibilidade Extrema:} V1 apresentou CV de 1,48 (alta variabilidade), enquanto V2 alcançou CV de 0,87 (moderada variabilidade) — uma redução de 41\% na dispersão relativa.
-    \item \textbf{Cenário de Falha Catastrófica:} A V2 manteve tempos de resposta mais consistentes durante o período de fallback, com CV de 0,92 versus 1,21 da V1.
-    \item \textbf{Cenário de Rajadas:} Ambas as versões apresentaram variabilidade similar em períodos normais, mas a V2 demonstrou recuperação mais consistente após as rajadas.
-\end{itemize}
-
-A redução do CV na V2 tem implicações práticas importantes: sistemas mais previsíveis facilitam o dimensionamento de recursos, melhoram a experiência do usuário (que não enfrenta oscilações de latência) e simplificam a definição de SLAs baseados em percentis.
-
-
-\begin{figure}[H]
-\centering
 \includegraphics[width=0.85\textwidth]{images/05_status_distribution.png}
 \caption{Distribuição de Códigos de Status HTTP por Cenário}
 \label{fig:status_distribution}
@@ -826,7 +750,6 @@ Os resultados experimentais foram conclusivos e demonstraram de forma inequívoc
     \item \textbf{Aumento de Capacidade:} A V2 processou 17,6\% mais requisições (415.927 vs 353.639), demonstrando que o mecanismo fail-fast libera recursos e aumenta o throughput.
     \item \textbf{Análise Estatística:} O teste de Mann-Whitney confirmou diferença significativa (p $<$ 0,001), e o Cliff's Delta ($\delta = 0,38$) indica \textbf{effect size médio}, confirmando relevância prática substancial.
     \item \textbf{Elasticidade:} O CB demonstrou capacidade de transicionar dinamicamente entre estados conforme o comportamento da dependência.
-    \item \textbf{Maior Previsibilidade:} A análise do Coeficiente de Variação (CV) mostrou que o Circuit Breaker torna o sistema mais previsível e consistente, mesmo sob condições de estresse e falhas intermitentes. A redução de até 41\% no CV demonstra que a V2 oferece comportamento mais estável, facilitando o dimensionamento de recursos e a definição de SLAs.
 \end{itemize}
 
 A arquitetura Baseline (V1) provou ser \textbf{inadequada para produção} em sistemas de missão crítica, enquanto a V2 (Circuit Breaker) demonstrou robustez excepcional, protegendo o \texttt{servico-pagamento}, mantendo vazão estavel e garantindo disponibilidade percebida pelo usuário através da degradação graciosa (HTTP 202). Os resultados são particularmente relevantes para sistemas financeiros, e-commerce e qualquer domínio onde a disponibilidade é requisito crítico.
