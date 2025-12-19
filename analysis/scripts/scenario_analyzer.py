@@ -26,7 +26,7 @@ OUTPUT_DIR = "analysis_results/scenarios"
 PLOTS_DIR = os.path.join(OUTPUT_DIR, "plots")
 CSV_DIR = os.path.join(OUTPUT_DIR, "csv")
 
-PALETTE = {"V1": "#d62728", "V2": "#2ca02c"}
+PALETTE = {"V1": "#d62728", "V2": "#2ca02c", "V3": "#1f77b4"}
 
 ESTIMATED_DURATIONS = {
     "catastrofe": 13 * 60,
@@ -59,7 +59,7 @@ class ScenarioAnalyzer:
         
         self.data = {}
         self.summary = {}
-        for version in ["V1", "V2"]:
+        for version in ["V1", "V2", "V3"]:
             file_path = os.path.join(self.results_dir, f"{self.scenario_name}_{version}.json")
             
             if os.path.exists(file_path):
@@ -287,13 +287,14 @@ class ScenarioAnalyzer:
         # Percentis
         metrics = ['P50 (ms)', 'P95 (ms)', 'P99 (ms)']
         x = np.arange(len(metrics))
-        width = 0.35
-        
-        v1_values = [self.response_df[self.response_df['Version'] == 'V1'][m].values[0] for m in metrics]
-        v2_values = [self.response_df[self.response_df['Version'] == 'V2'][m].values[0] for m in metrics]
-        
-        axes[0].bar(x - width/2, v1_values, width, label='V1', color=PALETTE['V1'])
-        axes[0].bar(x + width/2, v2_values, width, label='V2', color=PALETTE['V2'])
+        versions_present = self.response_df['Version'].tolist()
+        bar_group_width = 0.8
+        width = bar_group_width / max(len(versions_present), 1)
+
+        for i, v in enumerate(versions_present):
+            v_values = [self.response_df[self.response_df['Version'] == v][m].values[0] for m in metrics]
+            offset = -bar_group_width / 2 + (i + 0.5) * width
+            axes[0].bar(x + offset, v_values, width, label=v, color=PALETTE.get(v, '#333333'))
         axes[0].set_xlabel('Percentil')
         axes[0].set_ylabel('Tempo (ms)')
         axes[0].set_title('Comparação de Latência (P50, P95, P99)')
@@ -303,7 +304,7 @@ class ScenarioAnalyzer:
         axes[0].grid(True, alpha=0.3)
         
         # Distribuição de velocidade
-        versions = ['V1', 'V2']
+        versions = versions_present
         fast = [self.response_df[self.response_df['Version'] == v]['Fast Requests (%)'].values[0] for v in versions]
         slow = [self.response_df[self.response_df['Version'] == v]['Slow Requests (%)'].values[0] for v in versions]
         

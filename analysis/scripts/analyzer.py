@@ -20,7 +20,7 @@ LATEX_DIR = os.path.join(OUTPUT_DIR, "latex")
 MARKDOWN_DIR = os.path.join(OUTPUT_DIR, "markdown")
 
 # --- Cores e Estilos para Gráficos ---
-PALETTE = {"V1": "#d62728", "V2": "#2ca02c"}
+PALETTE = {"V1": "#d62728", "V2": "#2ca02c", "V3": "#1f77b4"}
 sns.set_style("whitegrid")
 
 class K6Analyzer:
@@ -48,7 +48,7 @@ class K6Analyzer:
         Carrega os dados dos arquivos de resultado do k6 (JSON).
         """
         print("Carregando dados dos resultados do k6...")
-        for version in ["V1", "V2"]:
+        for version in ["V1", "V2", "V3"]:
             file_path = os.path.join(self.results_dir, f"{version}_Completo.json")
             if os.path.exists(file_path):
                 with open(file_path, 'r') as f:
@@ -151,9 +151,14 @@ class K6Analyzer:
 
         # Gráfico 1: Tempo de Resposta (Médio e P95)
         plt.figure(figsize=(12, 7))
-        self.summary_df.plot(kind='bar', x='Version', y=['Avg Response Time (ms)', 'P95 Response Time (ms)'],
-                               color=[PALETTE['V1'], PALETTE['V2']],
-                               title="Tempo de Resposta: V1 vs V2")
+        colors = [PALETTE.get(v, '#333333') for v in self.summary_df['Version'].tolist()]
+        self.summary_df.plot(
+            kind='bar',
+            x='Version',
+            y=['Avg Response Time (ms)', 'P95 Response Time (ms)'],
+            color=colors,
+            title="Tempo de Resposta: Comparacao de Versoes"
+        )
         plt.ylabel("Tempo (ms)")
         plt.xticks(rotation=0)
         plt.tight_layout()
