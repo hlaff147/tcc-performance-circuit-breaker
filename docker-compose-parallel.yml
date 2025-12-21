@@ -1,0 +1,184 @@
+# =============================================================================
+# docker-compose-parallel.yml
+# Configuração para execução PARALELA com ambientes 100% ISOLADOS
+# Cada versão (V1, V2, V3) tem seu próprio adquirente dedicado
+# =============================================================================
+
+networks:
+  tcc-network:
+    driver: bridge
+
+services:
+  # ==========================================================================
+  # AMBIENTE V1 - Baseline (sem resiliência)
+  # ==========================================================================
+
+  servico-adquirente-v1:
+    build:
+      context: ./services/acquirer-service
+      dockerfile: Dockerfile
+    container_name: servico-adquirente-v1
+    ports:
+      - "8091:8081"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8081/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - tcc-network
+
+  servico-pagamento-v1:
+    build:
+      context: ./services/payment-service-v1
+      dockerfile: Dockerfile
+    container_name: servico-pagamento-v1
+    ports:
+      - "8080:8080"
+    environment:
+      - ADQUIRENTE_CLIENT_URL=http://servico-adquirente-v1:8081
+    depends_on:
+      servico-adquirente-v1:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - tcc-network
+
+  # ==========================================================================
+  # AMBIENTE V2 - Circuit Breaker (Resilience4j)
+  # ==========================================================================
+
+  servico-adquirente-v2:
+    build:
+      context: ./services/acquirer-service
+      dockerfile: Dockerfile
+    container_name: servico-adquirente-v2
+    ports:
+      - "8092:8081"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8081/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - tcc-network
+
+  servico-pagamento-v2:
+    build:
+      context: ./services/payment-service-v2
+      dockerfile: Dockerfile
+      args:
+        - CB_PROFILE=${CB_PROFILE:-equilibrado}
+    container_name: servico-pagamento-v2
+    ports:
+      - "8082:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${CB_PROFILE:-equilibrado}
+      - ADQUIRENTE_CLIENT_URL=http://servico-adquirente-v2:8081
+    depends_on:
+      servico-adquirente-v2:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - tcc-network
+
+  # ==========================================================================
+  # AMBIENTE V3 - Retry com Backoff Exponencial
+  # ==========================================================================
+
+  servico-adquirente-v3:
+    build:
+      context: ./services/acquirer-service
+      dockerfile: Dockerfile
+    container_name: servico-adquirente-v3
+    ports:
+      - "8093:8081"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8081/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - tcc-network
+
+  servico-pagamento-v3:
+    build:
+      context: ./services/payment-service-v3
+      dockerfile: Dockerfile
+    container_name: servico-pagamento-v3
+    ports:
+      - "8083:8080"
+    environment:
+      - ADQUIRENTE_CLIENT_URL=http://servico-adquirente-v3:8081
+    depends_on:
+      servico-adquirente-v3:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - tcc-network

@@ -4,11 +4,26 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_ROOT"
 
-SCENARIOS="${1:-all}"
+# Parse argumentos
+SCENARIOS="all"
+PARALLEL_MODE="${PARALLEL_MODE:-false}"
+
+for arg in "$@"; do
+  case "$arg" in
+    --parallel)
+      PARALLEL_MODE="true"
+      ;;
+    *)
+      SCENARIOS="$arg"
+      ;;
+  esac
+done
+
 SKIP_COMPLETE_SCENARIO="${SKIP_COMPLETE_SCENARIO:-false}"
 SKIP_ACADEMIC="${SKIP_ACADEMIC:-false}"
 INCLUDE_V3="${INCLUDE_V3:-true}"
 export INCLUDE_V3
+export PARALLEL_MODE
 
 python_cmd() {
   if command -v python3 >/dev/null 2>&1; then
@@ -29,6 +44,11 @@ docker_compose() {
 }
 
 echo "=== Pipeline completa (tests + cenários + análises + plots) ==="
+if [ "$PARALLEL_MODE" = "true" ]; then
+  echo ">>> Modo: PARALELO (V1, V2, V3 simultâneos) - ~60% mais rápido"
+else
+  echo ">>> Modo: SEQUENCIAL (use --parallel para execução paralela)"
+fi
 
 # Docker precisa estar rodando
 if ! docker info >/dev/null 2>&1; then
@@ -55,10 +75,15 @@ fi
 "$PYTHON" -m pip install -U pip >/dev/null
 "$PYTHON" -m pip install -r requirements.txt >/dev/null
 
-# 1) Cenário completo (V1/V2) + análise baseline
+# 1) Cenário completo (V1/V2/V3) + análise baseline
 if [ "$SKIP_COMPLETE_SCENARIO" != "true" ]; then
-  echo "=== Executando cenário completo (V1 e V2) ==="
-  bash ./run_all_tests.sh
+  if [ "$PARALLEL_MODE" = "true" ]; then
+    echo "=== Executando cenário completo em PARALELO (V1, V2, V3) ==="
+    bash ./run_all_tests_parallel.sh
+  else
+    echo "=== Executando cenário completo SEQUENCIAL (V1 e V2) ==="
+    bash ./run_all_tests.sh
+  fi
 
   echo "=== Analisando cenário completo (analysis/scripts/analyzer.py) ==="
   "$PYTHON" analysis/scripts/analyzer.py

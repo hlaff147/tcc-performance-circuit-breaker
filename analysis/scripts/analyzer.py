@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,6 +11,14 @@ from datetime import datetime
 import warnings
 
 warnings.filterwarnings('ignore')
+
+# Import do loader otimizado
+try:
+    from fast_loader import FastK6Loader, fast_bootstrap_ci, fast_cliffs_delta
+    USE_FAST_LOADER = True
+except ImportError:
+    USE_FAST_LOADER = False
+    print("⚠️  fast_loader não encontrado. Usando carregamento padrão.")
 
 # --- Configurações ---
 RESULTS_DIR = "k6/results"
@@ -45,24 +54,55 @@ class K6Analyzer:
 
     def load_data(self, max_sample_size=500000):
         """
-        Carrega os dados dos arquivos de resultado do k6 (JSON) de forma eficiente em memória.
+        Carrega os dados dos arquivos de resultado do k6 (JSON) de forma eficiente.
         
-        Para arquivos grandes (>100MB), usa amostragem reservoir para limitar uso de memória.
+        Usa FastK6Loader para:
+        - Parsing JSON com orjson (3-10x mais rápido)
+        - Processamento paralelo com multiprocessing
+        - Cache Parquet para reutilização instantânea
         
         Args:
             max_sample_size: Número máximo de pontos a carregar por versão (default: 500k)
         """
         import gc
+        
+        start_time = time.time()
+        print("\n" + "="*60)
+        print("  CARREGAMENTO DE DADOS")
+        print("="*60)
+        
+        if USE_FAST_LOADER:
+            print("🚀 Usando FastK6Loader (otimizado)")
+            loader = FastK6Loader(
+                results_dir=self.results_dir,
+                use_cache=True
+            )
+            self.data = loader.load_all_versions(
+                max_sample_size=max_sample_size
+            )
+        else:
+            print("⚠️  Usando carregamento padrão (mais lento)")
+            self._load_data_legacy(max_sample_size)
+        
+        elapsed = time.time() - start_time
+        print(f"\n⏱️  Tempo de carregamento: {elapsed:.2f}s")
+        print("="*60 + "\n")
+        
+        gc.collect()
+    
+    def _load_data_legacy(self, max_sample_size=500000):
+        """
+        Carregamento legado para fallback quando FastK6Loader não está disponível.
+        """
         import random
         
-        print("Carregando dados dos resultados do k6...")
+        print("Carregando dados dos resultados do k6 (modo legado)...")
         for version in ["V1", "V2", "V3"]:
             file_path = os.path.join(self.results_dir, f"{version}_Completo.json")
             if os.path.exists(file_path):
                 file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
                 print(f"  {version}: arquivo tem {file_size_mb:.1f} MB")
                 
-                # Para arquivos grandes, usa reservoir sampling
                 use_sampling = file_size_mb > 100
                 
                 if use_sampling:
@@ -79,11 +119,9 @@ class K6Analyzer:
                                     point_data = m['data']
                                     point_data['metric'] = m['metric']
                                     
-                                    # Reservoir sampling
                                     if len(all_points) < max_sample_size:
                                         all_points.append(point_data)
                                     else:
-                                        # Substitui com probabilidade decrescente
                                         j = random.randint(0, line_count - 1)
                                         if j < max_sample_size:
                                             all_points[j] = point_data
@@ -92,7 +130,6 @@ class K6Analyzer:
                     
                     print(f"  {version}: processadas {line_count:,} linhas, amostradas {len(all_points):,}")
                 else:
-                    # Arquivo pequeno, carrega tudo
                     all_points = []
                     with open(file_path, 'r') as f:
                         for line in f:
@@ -108,12 +145,10 @@ class K6Analyzer:
                 if all_points:
                     self.data[version] = pd.DataFrame(all_points)
                     print(f"Dados de {version} carregados com sucesso ({len(all_points):,} pontos).")
-                    # Força garbage collection para liberar memória
-                    gc.collect()
                 else:
-                    print(f"Aviso: Nenhum ponto de métrica encontrado para {version} em {file_path}")
+                    print(f"Aviso: Nenhum ponto de métrica encontrado para {version}")
             else:
-                print(f"Aviso: Arquivo de resultado para {version} não encontrado em {file_path}")
+                print(f"Aviso: Arquivo de resultado para {version} não encontrado")
 
     def process_data(self):
         """
@@ -512,12 +547,18 @@ class K6Analyzer:
     def _cliffs_delta(self, x, y):
         """
         Calcula Cliff's Delta - medida de effect size não paramétrica.
+        Usa versão vetorizada quando FastK6Loader está disponível.
+        
         Valores: [-1, 1], onde:
         - |d| < 0.147: negligível
         - |d| < 0.33: pequeno
         - |d| < 0.474: médio
         - |d| >= 0.474: grande
         """
+        if USE_FAST_LOADER:
+            return fast_cliffs_delta(x, y)
+        
+        # Fallback para implementação legada
         n_x, n_y = len(x), len(y)
         more = np.sum([np.sum(xi > y) for xi in x])
         less = np.sum([np.sum(xi < y) for xi in x])
@@ -538,7 +579,12 @@ class K6Analyzer:
     def _bootstrap_ci(self, x, y, n_bootstrap=10000, ci=0.95):
         """
         Calcula intervalo de confiança bootstrap para a diferença de médias.
+        Usa versão vetorizada quando FastK6Loader está disponível (~10x mais rápido).
         """
+        if USE_FAST_LOADER:
+            return fast_bootstrap_ci(x, y, n_bootstrap=n_bootstrap, ci=ci)
+        
+        # Fallback para implementação legada
         np.random.seed(42)
         diff_means = []
         for _ in range(n_bootstrap):

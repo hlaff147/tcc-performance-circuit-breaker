@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
-@FeignClient(name = "adquirente-client", url = "http://servico-adquirente:8081")
+@FeignClient(name = "adquirente-client", url = "${adquirente-client.url:http://servico-adquirente:8081}")
 public interface AdquirenteClient {
 
     @PostMapping(path = "/autorizar")
