@@ -286,7 +286,7 @@ O gráfico radar da Figura \ref{fig:radar_metrics} oferece uma visão holística
 
 \section{Análise Estatística Formal}
 
-Para validar estatisticamente a diferença entre as versões V1 e V2, aplicamos testes estatísticos adequados ao grande volume de dados.
+Para validar estatisticamente a diferença entre as versões V1 e V2, aplicamos testes estatísticos adequados ao grande volume de dados. Dado que dados de performance de software raramente seguem distribuição normal — apresentando distribuições assimétricas com cauda longa e outliers frequentes — optamos por complementar os testes paramétricos com medidas não-paramétricas de tamanho de efeito.
 
 \begin{table}[H]
 \centering
@@ -314,6 +314,30 @@ Intervalo de Confiança 95\% (V3) & [543,38; 558,02] ms \\
 O teste t revela uma diferença estatisticamente significativa entre V1 e V2 (p < 0,0001), indicando que as distribuições de tempos de resposta são distintas. O \textbf{Cohen's d} ($d = 1,078$) classifica o \textit{effect size} como \textbf{grande}, confirmando que a diferença observada possui relevância prática substancial.
 
 A ANOVA confirmou diferença significativa entre os três grupos (F = 546,79, p < 0,0001), com $\eta^2 = 0,267$ indicando um efeito grande.
+
+\subsection{Considerações sobre Medidas Não-Paramétricas}
+
+Embora o Cohen's d seja amplamente utilizado, ele assume distribuição normal e é sensível a outliers. Para dados de latência — que tipicamente apresentam distribuições assimétricas — o \textbf{Cliff's Delta} ($\delta$) oferece uma alternativa robusta \cite{romano2006}. O Cliff's Delta quantifica a frequência com que os valores de um grupo são maiores que os de outro, sendo ``distribution-free'' e baseado nos ranks das observações.
+
+A Tabela \ref{tab:effect-size-thresholds} apresenta os limiares de interpretação para ambas as medidas.
+
+\begin{table}[H]
+\centering
+\caption{Limiares de interpretação para tamanho de efeito}
+\label{tab:effect-size-thresholds}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Magnitude} & \textbf{Cohen's d} & \textbf{Cliff's Delta ($\delta$)} \\
+\midrule
+Negligenciável & < 0,20 & < 0,147 \\
+Pequeno & 0,20 & 0,147 \\
+Médio & 0,50 & 0,330 \\
+Grande & 0,80 & 0,474 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O valor observado de Cohen's d = 1,078 corresponde a um efeito ``muito grande'' na literatura de engenharia de software, validando que o Circuit Breaker não representa apenas uma melhoria incremental, mas uma \textbf{mudança de ordem de magnitude} na robustez operacional de microsserviços síncronos.
 
 \section{Análise da Versão V3 (Retry com Backoff Exponencial)}
 

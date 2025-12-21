@@ -8,6 +8,18 @@ Os principais benefícios desta arquitetura incluem: (i) \textbf{escalabilidade 
 
 Contudo, essa arquitetura introduz desafios significativos de natureza distribuída. A comunicação entre serviços através da rede é inerentemente não confiável, sujeita a latências variáveis, timeouts e falhas parciais. Em sistemas monolíticos, chamadas de função são executadas em memória com latência desprezível; em microsserviços, cada chamada atravessa a rede e pode falhar de múltiplas formas \cite{nygard2018}.
 
+\subsection{Dependabilidade em Sistemas Distribuídos}
+Para compreender a resiliência em microsserviços, é fundamental estabelecer uma base teórica sobre a dependabilidade. Conforme a taxonomia seminal de \citeonline{avizienis2004}, a dependabilidade é definida como a capacidade de evitar falhas de serviço que sejam mais frequentes ou severas do que o aceitável para os usuários. Esse conceito é sustentado por seis atributos fundamentais: \textbf{disponibilidade} (prontidão para serviço correto), \textbf{confiabilidade} (continuidade do serviço correto), \textbf{segurança} (safety), \textbf{confidencialidade}, \textbf{integridade} e \textbf{manutenibilidade}.
+
+O modelo de \textbf{falha-erro-mau funcionamento} (fault-error-failure) fornece a estrutura para analisar a degradação do sistema:
+\begin{itemize}
+    \item \textbf{Fault (falha):} A causa raiz, que pode ser física, de interação ou de desenvolvimento.
+    \item \textbf{Error (erro):} O estado interno anormal resultante dessa falha.
+    \item \textbf{Failure (mau funcionamento):} Ocorre quando o serviço deixa de cumprir sua especificação perante o usuário externo.
+\end{itemize}
+
+Em microsserviços, as \textbf{falhas de timing} — onde uma resposta correta é entregue fora da janela temporal aceitável — são tão críticas quanto as \textbf{falhas de conteúdo}, especialmente em sistemas de pagamento que operam sob rigorosos Acordos de Nível de Serviço (SLAs) \cite{avizienis2004}.
+
 \section{Comunicação Síncrona e seus Riscos}
 A comunicação síncrona, tipicamente implementada via HTTP/REST, é caracterizada pelo bloqueio do serviço consumidor enquanto aguarda a resposta do serviço provedor. Embora seja simples de implementar e depurar, este modelo introduz um \textbf{acoplamento temporal} entre os serviços: se o provedor estiver lento ou indisponível, o consumidor também será afetado \cite{burns2018}.
 
@@ -19,18 +31,48 @@ Os principais riscos associados à comunicação síncrona incluem:
     \item \textbf{Efeito Dominó:} Em cadeias de dependências (A → B → C), a falha de C pode derrubar B e, consequentemente, A, mesmo que estes estejam funcionando corretamente.
 \end{itemize}
 
+A Tabela \ref{tab:sinc-vs-assinc} compara as características da comunicação síncrona com a assíncrona (Arquitetura Orientada a Eventos), evidenciando os trade-offs de cada abordagem.
+
+\begin{table}[H]
+\centering
+\caption{Comparação entre comunicação síncrona e assíncrona}
+\label{tab:sinc-vs-assinc}
+\begin{tabular}{lp{4.5cm}p{4.5cm}}
+\toprule
+\textbf{Atributo} & \textbf{Comunicação Síncrona} & \textbf{Comunicação Assíncrona (EDA)} \\
+\midrule
+Acoplamento & Forte (temporal e espacial) & Fraco (baseado em eventos) \\
+Latência & Ditada pelo serviço mais lento & Processamento em paralelo \\
+Consistência & Imediata (tipicamente) & Eventual \\
+Complexidade & Menor (fluxo linear) & Maior (gerenciamento de eventos) \\
+Tolerância a Falhas & Exige padrões como Circuit Breaker & Naturalmente resiliente \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Embora a EDA ofereça vantagens claras em termos de elasticidade e robustez, a comunicação síncrona permanece necessária para operações que exigem confirmação imediata de estado, como a validação de crédito em uma jornada de checkout.
+
 \section{Padrões de Tolerância a Falhas}
-Para mitigar os riscos da comunicação distribuída, diversos padrões de tolerância a falhas foram propostos pela comunidade de engenharia de software \cite{nygard2018, richardson2018}:
+Para mitigar os riscos da comunicação distribuída, diversos padrões de tolerância a falhas foram propostos pela comunidade de engenharia de software \cite{nygard2018, richardson2018}. A Tabela \ref{tab:padroes-resiliencia} resume os principais padrões, seus mecanismos e riscos associados.
 
-\textbf{Timeout:} Define um limite máximo de espera por uma resposta. Embora essencial, não é suficiente isoladamente, pois o serviço ainda consome recursos durante a espera.
+\begin{table}[H]
+\centering
+\caption{Comparação de padrões de tolerância a falhas}
+\label{tab:padroes-resiliencia}
+\begin{tabular}{lp{3.5cm}p{3.5cm}p{3.5cm}}
+\toprule
+\textbf{Padrão} & \textbf{Mecanismo} & \textbf{Benefício Principal} & \textbf{Risco Associado} \\
+\midrule
+Timeout & Limite máximo de espera & Liberação de recursos bloqueados & Descarte de requisições válidas \\
+Retry & Repetição de chamadas & Recupera falhas transitórias & Amplificação de carga (Retry Storm) \\
+Bulkhead & Compartimentalização de recursos & Isolamento de falhas & Overhead de gerenciamento \\
+Rate Limiter & Controle de taxa & Proteção contra sobrecarga & Rejeição de requisições legítimas \\
+Circuit Breaker & Corte de fluxo baseado em erro & Previne falhas em cascata & Configuração de limiares imprecisa \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\textbf{Retry:} Reenvia automaticamente requisições que falharam, útil para falhas transitórias. Deve ser implementado com backoff exponencial para evitar sobrecarga do serviço dependente.
-
-\textbf{Bulkhead:} Isola recursos (threads, conexões) por dependência, impedindo que a falha de uma dependência consuma todos os recursos do serviço.
-
-\textbf{Rate Limiter:} Controla a taxa de requisições enviadas ou recebidas, protegendo serviços de sobrecarga.
-
-\textbf{Circuit Breaker:} Interrompe temporariamente chamadas a uma dependência que apresenta falhas recorrentes, permitindo recuperação e evitando desperdício de recursos.
+Entre esses padrões, o \textbf{Circuit Breaker} destaca-se por sua capacidade de interromper temporariamente chamadas a uma dependência que apresenta falhas recorrentes, permitindo recuperação e evitando desperdício de recursos. Estudos indicam que a implementação correta deste padrão pode reduzir as taxas de erro em até 58\% durante períodos de instabilidade \cite{ieeecloud2024}.
 
 \section{O Padrão Circuit Breaker em Detalhe}
 O padrão Circuit Breaker, popularizado por Michael Nygard em seu livro ``Release It!'' \cite{nygard2018} e documentado por Martin Fowler \cite{fowler2014cb}, opera como um disjuntor elétrico: quando detecta condições anormais, ``abre'' para interromper o fluxo e proteger o sistema.
