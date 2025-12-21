@@ -15,6 +15,25 @@ Esta documentação descreve **as três versões do serviço de pagamento** usad
 
 ---
 
+## Changelog
+
+### v2.0.0 (2025-12-20)
+
+**Mudanças no Serviço V2 (Circuit Breaker):**
+
+1. **Propagação de erros antes do CB abrir:** O fallback agora **só retorna 503** quando o Circuit Breaker está OPEN (`CallNotPermittedException`). Antes de abrir, exceções são **propagadas como 5xx** para garantir contabilização correta das falhas.
+
+2. **URL dinâmica do Feign Client:** A URL do adquirente agora é configurável via propriedade `adquirente-client.url`:
+   ```java
+   @FeignClient(name = "adquirente-client", url = "${adquirente-client.url:http://servico-adquirente:8081}")
+   ```
+
+3. **Testes atualizados:** 
+   - `CircuitBreakerIntegrationTest` ajustado para perfil `agressivo` 
+   - `PaymentServiceTest` atualizado para verificar propagação de exceções
+
+---
+
 ## 1) Visão geral
 
 ### 1.1 Arquitetura (alto nível)
@@ -36,7 +55,7 @@ Integração com o adquirente:
 | Versão | Objetivo | Resiliência | Dependências principais | Observabilidade |
 |-------:|----------|-------------|-------------------------|----------------|
 | v1 | Baseline (controle) | Sem CB/Retry | Spring Web, OpenFeign, Actuator | Health (Actuator) |
-| v2 | Circuit Breaker (Resilience4j) | `@CircuitBreaker` + fallback (202) | Spring Cloud Circuit Breaker (Resilience4j), Micrometer Prometheus, AOP | Health + Circuit Breaker endpoints + métricas + Prometheus |
+| v2 | Circuit Breaker (Resilience4j) | `@CircuitBreaker` + fallback (503) | Spring Cloud Circuit Breaker (Resilience4j), Micrometer Prometheus, AOP | Health + Circuit Breaker endpoints + métricas + Prometheus |
 | v3 | Retry (Backoff Exponencial) | `@Retry` + fallback após esgotar tentativas | Resilience4j Retry, Micrometer Prometheus, AOP | Health + Retry endpoints + métricas + Prometheus |
 
 ---
@@ -83,10 +102,11 @@ curl -i -X POST "http://localhost:8080/pagar?modo=normal" \
 #### v2 (Circuit Breaker)
 
 - **200 OK**: sucesso.
-- **500 Internal Server Error**: erro do adquirente mapeado (ex.: 503) ou exceção que contabiliza falha.
-- **202 Accepted**: fallback quando o Circuit Breaker está aberto (ou quando fallback é acionado por exceção).
+- **500 Internal Server Error**: erro do adquirente (ex.: 503) ou exceção - falhas são **propagadas** para contabilizar no CB.
+- **503 Service Unavailable**: fallback **apenas** quando o Circuit Breaker está OPEN (`CallNotPermittedException`).
 
-> Em v2, o “fallback” indica **degradação graciosa**: aceita o pagamento para “processamento posterior”.
+> [!IMPORTANT]
+> Em v2, o fallback (503) só é acionado quando o circuito está **OPEN**. Antes de abrir, falhas são propagadas como 5xx para serem corretamente contabilizadas pelo Circuit Breaker.
 
 #### v3 (Retry)
 
@@ -326,27 +346,50 @@ Circuit Breaker no método:
 @CircuitBreaker(name = "adquirente-cb", fallbackMethod = "processPaymentFallback")
 @Timed(value = "payment.processing.time")
 public PaymentResponse processPayment(String modo, PaymentRequest request) {
+    log.info("Processando pagamento [v2] - modo: {}, cliente: {}", modo, request.customerId());
+    
     ResponseEntity<String> response = acquirerClient.autorizarPagamento(modo, request.toMap());
+    
+    // Mapeamento de status: 503 do adquirente -> lança exceção para contabilizar no CB
     if (response.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
-        return PaymentResponse.failure("Serviço adquirente indisponível: " + response.getBody());
+        log.warn("Adquirente retornou 503. Mapeando para falha.");
+        failureCounter.increment();
+        throw new RuntimeException("Serviço adquirente indisponível: " + response.getBody());
     }
+    
+    successCounter.increment();
     return PaymentResponse.success(response.getBody());
 }
 ```
 
 Fallback:
 
-- Se `CallNotPermittedException` (circuito OPEN): responde 202 e outcome `CIRCUIT_BREAKER_OPEN`
-- Para outras exceções: responde 202 e outcome `ACCEPTED_ASYNC`
+- Se `CallNotPermittedException` (circuito OPEN): responde 503 e outcome `CIRCUIT_BREAKER_OPEN`
+- Para outras exceções: **propaga o erro** (5xx) para contabilização correta no CB
 
 ```java
-public PaymentResponse processPaymentFallback(String modo, PaymentRequest request, Throwable t) {
-    if (t instanceof CallNotPermittedException) {
+public PaymentResponse processPaymentFallback(String modo, PaymentRequest request, Throwable throwable) {
+    if (throwable instanceof CallNotPermittedException) {
+        fallbackCounter.increment();
+        log.info("Circuit Breaker OPEN - Fallback acionado para cliente: {}", request.customerId());
         return PaymentResponse.circuitBreakerOpen();
     }
-    return PaymentResponse.fallback("Pagamento aceito para processamento posterior: " + t.getMessage());
+
+    // Fora do cenário de circuito OPEN, não degradar para 202: propagar erro (5xx)
+    // para refletir falhas reais antes da abertura do circuito.
+    failureCounter.increment();
+    log.warn("Falha propagada (sem fallback): {} - Cliente: {}", 
+            throwable.getClass().getSimpleName(), request.customerId());
+
+    if (throwable instanceof RuntimeException runtimeException) {
+        throw runtimeException;
+    }
+    throw new RuntimeException(throwable);
 }
 ```
+
+> [!NOTE]
+> **Mudança importante (v2.0.0):** O fallback agora só retorna 503 quando o CB está OPEN. Antes de abrir, erros são propagados (5xx) para garantir que o CB contabilize corretamente as falhas e abra no threshold configurado.
 
 ### 5.3.1 Exemplo de código (métricas customizadas)
 
