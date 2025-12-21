@@ -80,7 +80,7 @@ public class PaymentService {
             if (response.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
                 log.warn("Adquirente retornou 503. Mapeando para falha. Duração: {}ms", duration);
                 failureCounter.increment();
-                return PaymentResponse.failure("Serviço adquirente indisponível: " + response.getBody());
+                throw new RuntimeException("Serviço adquirente indisponível: " + response.getBody());
             }
             
             log.info("Pagamento processado com sucesso. Status: {}, Duração: {}ms", 
@@ -110,15 +110,21 @@ public class PaymentService {
      * @return PaymentResponse com status de fallback
      */
     public PaymentResponse processPaymentFallback(String modo, PaymentRequest request, Throwable throwable) {
-        fallbackCounter.increment();
-        
         if (throwable instanceof CallNotPermittedException) {
+            fallbackCounter.increment();
             log.info("Circuit Breaker OPEN - Fallback acionado para cliente: {}", request.customerId());
             return PaymentResponse.circuitBreakerOpen();
         }
-        
-        log.warn("Fallback acionado por exceção: {} - Cliente: {}", 
+
+        // Fora do cenário de circuito OPEN, não degradar para 202: propagar erro (5xx)
+        // para refletir falhas reais antes da abertura do circuito.
+        failureCounter.increment();
+        log.warn("Falha propagada (sem fallback): {} - Cliente: {}", 
                 throwable.getClass().getSimpleName(), request.customerId());
-        return PaymentResponse.fallback("Pagamento aceito para processamento posterior: " + throwable.getMessage());
+
+        if (throwable instanceof RuntimeException runtimeException) {
+            throw runtimeException;
+        }
+        throw new RuntimeException(throwable);
     }
 }
