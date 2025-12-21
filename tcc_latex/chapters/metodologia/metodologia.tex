@@ -1,0 +1,355 @@
+\chapter{Metodologia e Design do Experimento}
+\label{cap:metodologia}
+
+\section{Visão Geral da Metodologia}
+Este Trabalho de Conclusão de Curso adota uma abordagem de \textbf{pesquisa experimental quantitativa}. O método consiste em construir uma \textbf{POC (Prova de Conceito) simplificada} que simula um ecossistema de microsserviços com dependência síncrona. A POC é intencionalmente minimalista — sem banco de dados, cache ou autenticação — para isolar o efeito do Circuit Breaker como única variável de interesse.
+
+A investigação compara duas variações arquiteturais do \texttt{servico-pagamento}: (i) uma versão Baseline, sem mecanismos avançados de resiliência, e (ii) uma versão com Circuit Breaker implementado via Resilience4j. Ambas são orquestradas com \texttt{Docker Compose} e submetidas a campanhas de testes de carga com \texttt{k6}, permitindo coletar métricas objetivas de desempenho (vazão e latência) e resiliência (taxa de erro).
+
+\section{Ambiente Experimental}
+Os experimentos foram executados em um ambiente controlado com as seguintes especificações:
+
+\textbf{Hardware:}
+\begin{itemize}
+    \item \textbf{Processador:} Apple M1
+    \item \textbf{Memória RAM:} 8 GB
+    \item \textbf{Armazenamento:} SSD 256 GB
+    \item \textbf{Sistema Operacional:} macOS 15.x
+\end{itemize}
+
+\textbf{Versões de Software:}
+\begin{itemize}
+    \item \textbf{Docker Desktop:} 4.25+ com Docker Engine 24.0+
+    \item \textbf{Docker Compose:} v2.20+
+    \item \textbf{Java:} OpenJDK 17.0.8 (Eclipse Temurin)
+    \item \textbf{Spring Boot:} 3.1.5
+    \item \textbf{Resilience4j:} 2.1.0
+    \item \textbf{Grafana k6:} v0.46.0
+\end{itemize}
+
+\textbf{Configuração dos Contêineres Docker:}
+\begin{itemize}
+    \item \textbf{servico-pagamento:} 1 GB de memória, 1 CPU
+    \item \textbf{servico-adquirente:} 512 MB de memória, 0.5 CPU
+    \item \textbf{Rede:} Bridge network dedicada para isolamento
+\end{itemize}
+
+\textbf{Configuração do Circuit Breaker (V2):}
+\begin{itemize}
+    \item \texttt{failureRateThreshold}: 50\%
+    \item \texttt{slowCallRateThreshold}: 70\%
+    \item \texttt{slowCallDurationThreshold}: 3000ms
+    \item \texttt{slidingWindowType}: COUNT\_BASED
+    \item \texttt{slidingWindowSize}: 10 requisições
+    \item \texttt{minimumNumberOfCalls}: 5
+    \item \texttt{waitDurationInOpenState}: 10s
+    \item \texttt{permittedNumberOfCallsInHalfOpenState}: 3
+\end{itemize}
+
+\textbf{Repetições:} Cada cenário foi executado uma única vez por versão (V1 e V2), totalizando 8 execuções. A duração dos testes (9 a 13 minutos por cenário) e o volume de requisições (60.000 a 83.000 por teste) fornecem amostras estatisticamente significativas para análise.
+
+\section{Ferramentas e Tecnologias (O Stack)}
+O experimento será conduzido com um conjunto integrado de ferramentas que sustentam tanto o desenvolvimento quanto a execução controlada dos cenários de teste:
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{images/arquitetura_simplificada.png}
+\caption{Stack de Monitoramento e Testes}
+\label{fig:stack}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Java 17+ e Spring Boot 3:} fundamentos para a implementação dos microsserviços do ecossistema de pagamentos, oferecendo um ambiente moderno, performático e amplamente suportado pela comunidade.
+    \item \textbf{Spring Cloud OpenFeign:} cliente declarativo utilizado para a comunicação síncrona entre \texttt{servico-pagamento} e \texttt{servico-adquirente}, simplificando a integração entre serviços através de interfaces anotadas.
+    \item \textbf{Spring Cloud Resilience4j:} biblioteca responsável por fornecer o mecanismo de Circuit Breaker e demais padrões de tolerância a falhas, incluindo suporte nativo para métricas, fallbacks e configurações flexíveis.
+    \item \textbf{Docker e Docker Compose:} garantem que o ambiente experimental seja isolado, reproduzível e facilmente provisionado, permitindo a execução consistente dos testes em qualquer máquina.
+    \item \textbf{Grafana k6:} ferramenta de testes de carga de código aberto escrita em JavaScript/Go, que permite descrever cenários complexos com usuários virtuais (VUs), estágios de carga progressivos e \texttt{thresholds} para validação automática de SLAs. O k6 exporta métricas detalhadas em formato JSON para análise posterior.
+\end{itemize}
+
+\section{Arquitetura do Sistema Experimental}
+O ambiente experimental consiste em uma \textbf{Prova de Conceito (POC) simplificada}, propositalmente rudimentar, desenvolvida para isolar e evidenciar o comportamento do Circuit Breaker sem a complexidade de um sistema de produção real. A simplicidade é intencional: permite atribuir com clareza as diferenças observadas exclusivamente ao padrão de resiliência, sem variáveis de confusão como banco de dados, cache, autenticação ou múltiplas dependências.
+
+A POC é composta por dois microsserviços desenvolvidos em Spring Boot e empacotados como contêineres Docker:
+
+\subsection{\texttt{servico-adquirente} — Ponto de Falha Controlado}
+\begin{itemize}
+    \item \textbf{Função:} simular um gateway externo de pagamento (por exemplo, Cielo ou Rede) responsável por autorizar transações.
+    \item \textbf{Endpoint:} expõe \texttt{POST /autorizar} para receber solicitações de autorização.
+    \item \textbf{Controle Experimental:} o comportamento é configurável via o parâmetro de query \texttt{?modo=}:
+    \begin{itemize}
+        \item \texttt{modo=normal}: responde em aproximadamente 50 ms com HTTP 200 (OK). Simula operação saudável.
+        \item \texttt{modo=latencia}: responde em 3000 ms (utilizando \texttt{Thread.sleep()}) com HTTP 200 (OK). Simula degradação de performance.
+        \item \texttt{modo=falha}: responde imediatamente com HTTP 500 (Internal Server Error). Simula indisponibilidade.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Respostas Possíveis do Sistema}
+
+O \texttt{servico-pagamento} pode retornar diferentes códigos HTTP dependendo do estado do sistema e da versão (V1 ou V2):
+
+\begin{table}[H]
+\centering
+\caption{Códigos de Resposta HTTP e seus Significados}
+\label{tab:http-responses}
+\begin{tabular}{clcc}
+\toprule
+\textbf{Status} & \textbf{Significado} & \textbf{Origem} & \textbf{Versão} \\
+\midrule
+200/201 & Sucesso real & API funcionou & V1, V2 \\
+202 & Fallback (pagamento agendado) & CB aberto & V2 \\
+500 & Erro da API externa & Falha propagada & V1, V2 \\
+503 & CB rejeitando requisições & CB aberto & V2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O código HTTP 202 (Accepted) é particularmente importante pois representa a \textbf{degradação graciosa}: o sistema informa ao usuário que o pagamento foi recebido e será processado posteriormente, em vez de retornar um erro.
+
+\subsection{\texttt{servico-pagamento} — Sistema Sob Teste}
+\begin{itemize}
+    \item \textbf{Função:} orquestrar o fluxo de pagamento exposto aos clientes finais e consumir o \texttt{servico-adquirente} síncronamente.
+    \item \textbf{Endpoint:} expõe \texttt{POST /pagar}, que será exercitado pelos scripts do k6.
+    \item \textbf{Lógica de Negócio:} utiliza um Feign Client para delegar a autorização ao \texttt{servico-adquirente}. Este serviço possuirá duas versões, que configuram a variável independente do experimento.
+\end{itemize}
+
+\section{Variáveis do Experimento}
+
+\subsection{Variável Independente — Estratégia de Resiliência no \texttt{servico-pagamento}}
+\begin{itemize}
+    \item \textbf{V1: Baseline (Controle):} implementação ingênua que apenas configura timeouts curtos (por exemplo, 2 segundos) no Feign Client para conexão e leitura.
+    \item \textbf{V2: Circuit Breaker + Fallback:} implementação robusta com Resilience4j. O Circuit Breaker é configurado para abrir após detectar, por exemplo, 50\% de falhas em uma janela de requisições. Quando o circuito está aberto, um método de fallback devolve HTTP 202 (Accepted) com a mensagem "Pagamento recebido e agendado para processamento posterior.", caracterizando a degradação graciosa.
+    \item \textbf{V3: Circuit Breaker + Time Limiter:} extensão da V2 que adiciona um limite de tempo (\textit{Time Limiter}) às chamadas. Requisições que excedem o timeout configurado são automaticamente interrompidas, forçando falhas que contribuem para a abertura do circuito. Essa configuração é particularmente eficaz em cenários de latência elevada, onde a dependência responde lentamente mas não falhando explicitamente.
+\end{itemize}
+
+\subsection{Variáveis Dependentes — Métricas coletadas via k6}
+\begin{itemize}
+    \item \textbf{\texttt{http\_reqs}:} número total de requisições processadas, utilizado como medida de vazão.
+    \item \textbf{\texttt{http\_req\_duration\{p(95)\}}:} percentil 95 do tempo de resposta, indicador de latência sob carga.
+    \item \textbf{\texttt{http\_req\_failed}:} taxa de requisições consideradas falhas pelo k6, refletindo a resiliência percebida.
+    \item \textbf{Coeficiente de Variação (CV):} razão entre o desvio padrão e a média do tempo de resposta, utilizada para medir a consistência e previsibilidade do sistema. Valores menores indicam maior estabilidade.
+\end{itemize}
+
+\section{Plano de Execução — Cenários de Teste k6}
+Quatro cenários de teste foram desenvolvidos em k6, cada um projetado para exercitar diferentes aspectos do comportamento do sistema sob estresse. Cada cenário foi executado duas vezes: uma para a versão Baseline (V1) e outra para a versão com Circuit Breaker (V2). Os cenários utilizam de 50 a 200 usuários virtuais (VUs) com duração variável para simular diferentes padrões de carga realistas.
+
+\subsection{Cenário 1 — Falha Catastrófica}
+
+\textbf{Contexto Real:} Este cenário reproduz situações como deploy problemático em produção, queda total de servidor, ou falha de infraestrutura de rede. São eventos raros, porém de alto impacto quando ocorrem.
+
+\begin{itemize}
+    \item \textbf{Descrição:} A API externa (\texttt{servico-adquirente}) fica \textbf{100\% indisponível} por 5 minutos consecutivos, retornando erro HTTP 500 em todas as requisições.
+    
+    \item \textbf{Fases do Teste (13 minutos):}
+    \begin{enumerate}
+        \item \textbf{Aquecimento} (0-1min): Rampa de 0 a 50 VUs, operação normal.
+        \item \textbf{Operação Normal} (1-4min): 100 VUs, distribuição realista (70\% sucesso, 20\% latência, 10\% falha).
+        \item \textbf{CATÁSTROFE} (4-9min): 150 VUs, \textbf{100\% das requisições em modo falha}. Este é o momento crítico.
+        \item \textbf{Recuperação} (9-12min): API volta ao normal gradualmente (60\% sucesso, 25\% latência, 15\% falha).
+        \item \textbf{Cooldown} (12-13min): Redução a 0 VUs.
+    \end{enumerate}
+    
+    \item \textbf{Comportamento Esperado:}
+    \begin{itemize}
+        \item \textit{V1 (Baseline):} Todas as requisições aguardam timeout (~3s), threads ficam bloqueadas, potencial cascata de falhas.
+        \item \textit{V2 (Circuit Breaker):} CB detecta falhas em ~10s, abre circuito, retorna fallback (HTTP 202) em <100ms.
+    \end{itemize}
+    
+    \item \textbf{Objetivo:} Verificar se o CB abre rapidamente durante falha total, protege recursos e mantém o sistema responsivo via fallback.
+    \item \textbf{Threshold:} \texttt{http\_req\_duration\{p(95)\} < 1000ms}.
+\end{itemize}
+
+\subsection{Cenário 2 — Degradação Gradual}
+
+\textbf{Contexto Real:} Este cenário reproduz a situação mais comum em produção: um serviço que começa saudável mas degrada progressivamente devido a memory leaks, pool de conexões esgotando, CPU saturando ou acúmulo de requisições em fila.
+
+\begin{itemize}
+    \item \textbf{Descrição:} A taxa de falhas e latência da API externa \textbf{aumenta gradualmente} ao longo do teste, simulando degradação progressiva típica de problemas de infraestrutura.
+    
+    \item \textbf{Fases do Teste (13 minutos):}
+    \begin{enumerate}
+        \item \textbf{Sistema Saudável} (0-2min): 100 VUs, baixa taxa de erro (5\% falha, 15\% latência, 80\% normal).
+        \item \textbf{Degradação Inicial} (2-5min): 150 VUs, degradação perceptível (20\% falha, 30\% latência, 50\% normal).
+        \item \textbf{CRÍTICO} (5-8min): 200 VUs, sistema sob estresse severo (50\% falha, 40\% latência, 10\% normal).
+        \item \textbf{Recuperação} (8-12min): 100 VUs, melhora gradual (15\% falha, 25\% latência).
+        \item \textbf{Cooldown} (12-13min): Encerramento.
+    \end{enumerate}
+    
+    \item \textbf{Comportamento Esperado:}
+    \begin{itemize}
+        \item \textit{V1 (Baseline):} Degrada junto com a API, usuários experimentam latência crescente.
+        \item \textit{V2 (Circuit Breaker):} CB pode detectar degradação e isolar antes do colapso total.
+    \end{itemize}
+    
+    \item \textbf{Objetivo:} Avaliar se o CB detecta degradação precoce e isola o problema antes da cascata. Este cenário também valida que o CB \textbf{não introduz overhead} em condições moderadas.
+\end{itemize}
+
+\subsection{Cenário 3 — Rajadas Intermitentes}
+
+\textbf{Contexto Real:} Este cenário reproduz instabilidades de rede, problemas intermitentes de DNS, ou serviços que reiniciam frequentemente. É o \textbf{pior cenário para sistemas sem CB}, pois ficam constantemente oscilando entre funcionar e falhar.
+
+\begin{itemize}
+    \item \textbf{Descrição:} Períodos de \textbf{100\% falha} (1 minuto) alternados com períodos de operação normal (2 minutos), repetindo 3 vezes.
+    
+    \item \textbf{Padrão de Rajadas (13 minutos):}
+    \begin{enumerate}
+        \item \textbf{Aquecimento} (0-1min): 100 VUs, operação normal.
+        \item \textbf{Normal} (1-3min): 150 VUs (80\% sucesso, 15\% latência, 5\% falha).
+        \item \textbf{RAJADA 1} (3-4min): 200 VUs, \textbf{100\% falha}.
+        \item \textbf{Normal} (4-6min): 150 VUs, operação normal.
+        \item \textbf{RAJADA 2} (6-7min): 200 VUs, \textbf{100\% falha}.
+        \item \textbf{Normal} (7-9min): 150 VUs, operação normal.
+        \item \textbf{RAJADA 3} (9-10min): 200 VUs, \textbf{100\% falha}.
+        \item \textbf{Normal} (10-12min): 150 VUs, operação normal.
+        \item \textbf{Cooldown} (12-13min): Encerramento.
+    \end{enumerate}
+    
+    \item \textbf{Comportamento Esperado:}
+    \begin{itemize}
+        \item \textit{V1 (Baseline):} Sofre com cada rajada (100\% erro), recupera entre elas.
+        \item \textit{V2 (Circuit Breaker):} CB abre nas rajadas (~8s após início), fecha nos períodos normais. Demonstra \textbf{elasticidade}.
+    \end{itemize}
+    
+    \item \textbf{Objetivo:} Testar a capacidade do CB de \textbf{transicionar dinamicamente} entre estados (Fechado $\rightarrow$ Aberto $\rightarrow$ Semiaberto $\rightarrow$ Fechado) conforme o estado da dependência muda.
+\end{itemize}
+
+\subsection{Cenário 4 — Indisponibilidade Extrema (75\% OFF)}
+
+\textbf{Contexto Real:} Este é o cenário mais extremo, simulando janelas prolongadas de manutenção não programada, falhas de datacenter, ou dependências externas com SLA muito baixo. Demonstra o \textbf{ganho máximo} do Circuit Breaker.
+
+\begin{itemize}
+    \item \textbf{Descrição:} A API externa passa \textbf{75\% do tempo indisponível}, incluindo uma janela contínua de 4 minutos de falha total. Este cenário é propositalmente severo para evidenciar o valor do fallback.
+    
+    \item \textbf{Fases do Teste (9 minutos):}
+    \begin{enumerate}
+        \item \textbf{Aquecimento} (0-45s): 80 VUs, operação controlada.
+        \item \textbf{Operação Saudável} (45s-1.5min): 140 VUs, funcionamento normal.
+        \item \textbf{FALHA PROLONGADA} (1.5-5.5min): 180 VUs, \textbf{4 minutos contínuos de indisponibilidade} (100\% falha).
+        \item \textbf{Instabilidade} (5.5-7.5min): 200 VUs, rajadas adicionais com alta taxa de falha.
+        \item \textbf{Recuperação} (7.5-8.5min): 140 VUs, retorno gradual.
+        \item \textbf{Cooldown} (8.5-9min): Encerramento.
+    \end{enumerate}
+    
+    \item \textbf{Padrão de Indisponibilidade:}
+    \begin{itemize}
+        \item Ciclos de 80 segundos: 60s em falha + 20s de recuperação parcial.
+        \item Janela crítica central: 4 minutos de falha \textbf{ininterrupta}.
+    \end{itemize}
+    
+    \item \textbf{Comportamento Esperado:}
+    \begin{itemize}
+        \item \textit{V1 (Baseline):} Sistema praticamente \textbf{inutilizável} (~10\% sucesso). Caracteriza falha catastrófica.
+        \item \textit{V2 (Circuit Breaker):} CB mantém circuito aberto, serve fallbacks continuamente, preservando \textbf{~97\% de disponibilidade percebida}.
+    \end{itemize}
+    
+    \item \textbf{Objetivo:} Validar que o CB transforma um sistema inutilizável em um sistema funcional através da degradação graciosa.
+    \item \textbf{Thresholds:} \texttt{http\_req\_duration\{p(95)\} < 1200ms} e \texttt{http\_req\_failed < 0.25}.
+\end{itemize}
+
+\subsection{Cenário 5 — Recuperação Pós-Falha}
+
+\textbf{Contexto Real:} Este cenário avalia a capacidade de auto-recuperação do sistema após períodos de indisponibilidade. É crítico para validar que o Circuit Breaker não apenas protege durante falhas, mas também permite a retomada automática do serviço quando a dependência volta ao normal.
+
+\begin{itemize}
+    \item \textbf{Descrição:} O teste inicia com uma fase de falhas para forçar a abertura do Circuit Breaker, seguida por um período de normalização do serviço dependente.
+    
+    \item \textbf{Fases do Teste (10 minutos):}
+    \begin{enumerate}
+        \item \textbf{Operação Normal} (0-2min): 100 VUs, funcionamento saudável para estabelecer baseline.
+        \item \textbf{FALHA FORÇADA} (2-5min): 150 VUs, 100\% de falhas para forçar abertura do CB.
+        \item \textbf{RECUPERAÇÃO} (5-8min): 150 VUs, serviço dependente volta a operar normalmente.
+        \item \textbf{Estabilização} (8-10min): 100 VUs, validar retorno completo à operação normal.
+    \end{enumerate}
+    
+    \item \textbf{Comportamento Esperado:}
+    \begin{itemize}
+        \item \textit{V1 (Baseline):} Não possui mecanismo de recuperação automática; depende de reinicializações ou intervenção manual.
+        \item \textit{V2 (Circuit Breaker):} Após \texttt{waitDurationInOpenState} (10s), transita para SEMI-ABERTO, permite requisições de teste, e fecha o circuito automaticamente ao confirmar sucesso.
+    \end{itemize}
+    
+    \item \textbf{Objetivo:} Medir o tempo de recuperação do CB e validar a transição automática entre estados (ABERTO $\rightarrow$ SEMI-ABERTO $\rightarrow$ FECHADO).
+\end{itemize}
+
+\subsection{Cenário 6 — Falhas Intermitentes com Latência (V3)}
+
+\textbf{Contexto Real:} Este cenário é projetado especificamente para demonstrar o valor da versão V3 (com Time Limiter). Simula uma dependência que alterna entre respostas normais, respostas lentas e falhas explícitas — um padrão comum em serviços sobrecarregados.
+
+\begin{itemize}
+    \item \textbf{Descrição:} Combina falhas intermitentes com períodos de alta latência, testando a eficácia do Time Limiter em forçar a abertura do circuito quando a dependência está lenta mas não falhando explicitamente.
+    
+    \item \textbf{Fases do Teste (12 minutos):}
+    \begin{enumerate}
+        \item \textbf{Aquecimento} (0-1min): 80 VUs, operação normal.
+        \item \textbf{Latência Elevada} (1-4min): 120 VUs, 70\% das respostas com 3s de latência.
+        \item \textbf{Falhas Mistas} (4-7min): 150 VUs, 40\% falhas + 40\% latência + 20\% normal.
+        \item \textbf{Recuperação Gradual} (7-10min): 120 VUs, melhora progressiva.
+        \item \textbf{Cooldown} (10-12min): Encerramento.
+    \end{enumerate}
+    
+    \item \textbf{Comportamento Esperado:}
+    \begin{itemize}
+        \item \textit{V1 (Baseline):} Sofre com latência acumulada; threads bloqueadas aguardando respostas lentas.
+        \item \textit{V2 (Circuit Breaker):} Não abre o circuito apenas por lentidão se não houver falhas explícitas.
+        \item \textit{V3 (CB + Time Limiter):} O Time Limiter interrompe requisições lentas, gerando falhas que acionam o CB. Demonstra proteção superior em cenários de latência.
+    \end{itemize}
+    
+    \item \textbf{Objetivo:} Validar que a combinação CB + Time Limiter oferece proteção mais completa que o CB isolado, especialmente em cenários de degradação de latência.
+\end{itemize}
+
+\subsection{Resumo Comparativo dos Cenários}
+
+A Tabela \ref{tab:cenarios-resumo} apresenta uma visão consolidada dos cenários, destacando suas características distintivas e o propósito de cada um no experimento.
+
+\begin{table}[H]
+\centering
+\caption{Características dos Cenários de Teste}
+\label{tab:cenarios-resumo}
+\begin{tabular}{lcccl}
+\toprule
+\textbf{Cenário} & \textbf{Duração} & \textbf{VUs} & \textbf{Padrão de Falha} & \textbf{Testa} \\
+\midrule
+Catastrófica & 13min & 50-150 & 100\% falha por 5min & Fail-fast \\
+Degradação & 13min & 100-200 & 5\% → 50\% gradual & Detecção precoce \\
+Rajadas & 13min & 100-200 & 3× (100\% por 1min) & Elasticidade \\
+Indisponibilidade & 9min & 80-200 & 75\% offline & Ganho máximo \\
+Recuperação & 10min & 100-150 & Falha → Normal & Auto-recuperação \\
+Latência (V3) & 12min & 80-150 & 70\% lento + 40\% falha & Time Limiter \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Procedimento de Análise Estatística}
+
+Para validar estatisticamente as diferenças observadas entre as versões V1 (Baseline) e V2 (Circuit Breaker), foi definido um procedimento de análise estatística robusto, considerando as características dos dados coletados.
+
+\subsection{Justificativa para Testes Não-Paramétricos}
+
+A escolha por testes não-paramétricos foi motivada pelas seguintes características dos dados:
+
+\begin{itemize}
+    \item \textbf{Distribuição não-normal:} Tempos de resposta em sistemas distribuídos tipicamente apresentam distribuição assimétrica com cauda longa, violando a premissa de normalidade exigida por testes paramétricos como o teste t de Student.
+    \item \textbf{Grande volume amostral:} Com mais de 380.000 requisições por versão, testes de normalidade (Shapiro-Wilk, Kolmogorov-Smirnov) tendem a rejeitar a hipótese nula mesmo para desvios mínimos da normalidade.
+    \item \textbf{Presença de outliers:} Timeouts e respostas de fallback introduzem valores extremos que podem distorcer estimativas baseadas em média e desvio padrão.
+\end{itemize}
+
+\subsection{Testes Estatísticos Selecionados}
+
+\textbf{Teste de Mann-Whitney U:} Teste não-paramétrico para comparação de duas amostras independentes, utilizado para verificar se as distribuições de tempos de resposta de V1 e V2 são estatisticamente diferentes. O nível de significância adotado foi $\alpha = 0,05$.
+
+\textbf{Teste de Kolmogorov-Smirnov (KS):} Complementarmente, o teste KS foi aplicado para avaliar se as duas distribuições diferem em forma, não apenas em tendência central.
+
+\subsection{Medida de Tamanho do Efeito}
+
+\textbf{Cliff's Delta ($\delta$):} Para quantificar a magnitude prática da diferença entre V1 e V2, foi calculado o Cliff's Delta, uma medida de tamanho de efeito não-paramétrica. A interpretação segue a convenção de \cite{romano2006}:
+
+\begin{itemize}
+    \item $|\delta| < 0,147$: efeito \textbf{negligível}
+    \item $0,147 \leq |\delta| < 0,33$: efeito \textbf{pequeno}
+    \item $0,33 \leq |\delta| < 0,474$: efeito \textbf{médio}
+    \item $|\delta| \geq 0,474$: efeito \textbf{grande}
+\end{itemize}
+
+Esta medida é particularmente importante porque, com amostras muito grandes, diferenças estatisticamente significativas (p $<$ 0,05) podem não ter relevância prática. O Cliff's Delta permite distinguir entre significância estatística e significância prática.
+
+\subsection{Intervalo de Confiança}
+
+Para estimar a diferença média entre as versões, foi calculado um intervalo de confiança de 95\% utilizando bootstrap (1.000 reamostragens), técnica adequada para distribuições não-normais.

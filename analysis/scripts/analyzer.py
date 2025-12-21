@@ -43,27 +43,73 @@ class K6Analyzer:
         os.makedirs(self.latex_dir, exist_ok=True)
         os.makedirs(self.markdown_dir, exist_ok=True)
 
-    def load_data(self):
+    def load_data(self, max_sample_size=500000):
         """
-        Carrega os dados dos arquivos de resultado do k6 (JSON).
+        Carrega os dados dos arquivos de resultado do k6 (JSON) de forma eficiente em memória.
+        
+        Para arquivos grandes (>100MB), usa amostragem reservoir para limitar uso de memória.
+        
+        Args:
+            max_sample_size: Número máximo de pontos a carregar por versão (default: 500k)
         """
+        import gc
+        import random
+        
         print("Carregando dados dos resultados do k6...")
         for version in ["V1", "V2", "V3"]:
             file_path = os.path.join(self.results_dir, f"{version}_Completo.json")
             if os.path.exists(file_path):
-                with open(file_path, 'r') as f:
-                    # Processa cada linha do JSONL, combinando 'data' e 'metric'
+                file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                print(f"  {version}: arquivo tem {file_size_mb:.1f} MB")
+                
+                # Para arquivos grandes, usa reservoir sampling
+                use_sampling = file_size_mb > 100
+                
+                if use_sampling:
+                    print(f"  {version}: usando amostragem (máx. {max_sample_size:,} pontos)...")
                     all_points = []
-                    for line in f:
-                        if '"type":"Point"' in line:
-                            m = json.loads(line)
-                            point_data = m['data']
-                            point_data['metric'] = m['metric']
-                            all_points.append(point_data)
+                    line_count = 0
+                    
+                    with open(file_path, 'r') as f:
+                        for line in f:
+                            if '"type":"Point"' in line:
+                                line_count += 1
+                                try:
+                                    m = json.loads(line)
+                                    point_data = m['data']
+                                    point_data['metric'] = m['metric']
+                                    
+                                    # Reservoir sampling
+                                    if len(all_points) < max_sample_size:
+                                        all_points.append(point_data)
+                                    else:
+                                        # Substitui com probabilidade decrescente
+                                        j = random.randint(0, line_count - 1)
+                                        if j < max_sample_size:
+                                            all_points[j] = point_data
+                                except json.JSONDecodeError:
+                                    continue
+                    
+                    print(f"  {version}: processadas {line_count:,} linhas, amostradas {len(all_points):,}")
+                else:
+                    # Arquivo pequeno, carrega tudo
+                    all_points = []
+                    with open(file_path, 'r') as f:
+                        for line in f:
+                            if '"type":"Point"' in line:
+                                try:
+                                    m = json.loads(line)
+                                    point_data = m['data']
+                                    point_data['metric'] = m['metric']
+                                    all_points.append(point_data)
+                                except json.JSONDecodeError:
+                                    continue
                 
                 if all_points:
                     self.data[version] = pd.DataFrame(all_points)
-                    print(f"Dados de {version} carregados com sucesso.")
+                    print(f"Dados de {version} carregados com sucesso ({len(all_points):,} pontos).")
+                    # Força garbage collection para liberar memória
+                    gc.collect()
                 else:
                     print(f"Aviso: Nenhum ponto de métrica encontrado para {version} em {file_path}")
             else:

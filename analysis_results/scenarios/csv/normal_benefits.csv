@@ -1,0 +1,2 @@
+Scenario,Response Time Improvement (%),P95 Improvement (%),P99 Improvement (%),Protected Requests,Total Time Saved (s),Failure Reduction (%),V1 Failure Rate (%),V2 Failure Rate (%),Fast Response Increase (%),Slow Response Decrease (%),Test Duration (s),V1 Availability (%),V2 Availability (%),V1 Downtime (s),V2 Downtime (s),V1 Hard Downtime (s),V2 Hard Downtime (s)
+normal,-38.187610084003715,-27.744833177640526,-216.65785725578442,0.0,0.0,0,0.0,0.0,-1.593623487246731,0.0,300.84525384766664,100.0,100.0,0.0,0.0,0.0,0.0

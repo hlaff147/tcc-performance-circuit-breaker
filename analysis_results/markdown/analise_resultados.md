@@ -1,39 +1,40 @@
 # Análise de Performance: V1 vs V2
 
-Gerado em: 2025-12-06 19:57:17
+Gerado em: 2025-12-19 21:17:27
 
 ## Resumo das Métricas
 
 | Version   |   Total Requests |   Avg Response Time (ms) |   P95 Response Time (ms) |   Success Rate (%) |   Fallback Rate (%) |   Circuit Breaker Open Rate (%) |   API Failure Rate (%) |
 |:----------|-----------------:|-------------------------:|-------------------------:|-------------------:|--------------------:|--------------------------------:|-----------------------:|
-| V1        |           353639 |                  735.045 |                  2975.17 |            90.0447 |              0      |                               0 |                9.95535 |
-| V2        |           415927 |                  477.602 |                  2745.21 |            77.7095 |             22.2905 |                               0 |                0       |
+| V1        |            22650 |                  529.607 |                  2768.63 |            90.2252 |              0      |                               0 |                9.77483 |
+| V2        |            22470 |                  174.864 |                  2226.31 |            28.9987 |             71.0013 |                               0 |                0       |
+| V3        |            22628 |                  724.61  |                  2820.78 |            89.9593 |              0      |                               0 |               10.0407  |
 
 ## Análise Estatística
 
-| Métrica                          | Valor           |
-|:---------------------------------|:----------------|
-| N (V1)                           | 353639          |
-| N (V2)                           | 415927          |
-| Média (V1)                       | 735.05 ms       |
-| Média (V2)                       | 477.60 ms       |
-| Mediana (V1)                     | 160.56 ms       |
-| Mediana (V2)                     | 35.69 ms        |
-| Desvio Padrão (V1)               | 1085.40 ms      |
-| Desvio Padrão (V2)               | 952.68 ms       |
-| P95 (V1)                         | 2975.17 ms      |
-| P95 (V2)                         | 2745.21 ms      |
-| P99 (V1)                         | 3613.63 ms      |
-| P99 (V2)                         | 2977.47 ms      |
-| Mann-Whitney U                   | 101610477156.50 |
-| p-valor (MW)                     | 0.00e+00        |
-| Kolmogorov-Smirnov               | 0.3490          |
-| p-valor (KS)                     | 0.00e+00        |
-| Cliff's Delta                    | 0.3816          |
-| Interpretação Effect Size        | Médio           |
-| IC 95% Diferença (baixo)         | 252.84 ms       |
-| IC 95% Diferença (alto)          | 262.03 ms       |
-| Diferença Significativa (α=0.05) | Sim             |
+| Métrica                          | Valor        |
+|:---------------------------------|:-------------|
+| N (V1)                           | 22657        |
+| N (V2)                           | 22881        |
+| Média (V1)                       | 529.61 ms    |
+| Média (V2)                       | 174.86 ms    |
+| Mediana (V1)                     | 38.14 ms     |
+| Mediana (V2)                     | 3.25 ms      |
+| Desvio Padrão (V1)               | 997.39 ms    |
+| Desvio Padrão (V2)               | 616.42 ms    |
+| P95 (V1)                         | 2768.63 ms   |
+| P95 (V2)                         | 2226.31 ms   |
+| P99 (V1)                         | 2971.71 ms   |
+| P99 (V2)                         | 2874.19 ms   |
+| Mann-Whitney U                   | 413180104.00 |
+| p-valor (MW)                     | 0.00e+00     |
+| Kolmogorov-Smirnov               | 0.5153       |
+| p-valor (KS)                     | 0.00e+00     |
+| Cliff's Delta                    | 0.5940       |
+| Interpretação Effect Size        | Grande       |
+| IC 95% Diferença (baixo)         | 339.74 ms    |
+| IC 95% Diferença (alto)          | 370.12 ms    |
+| Diferença Significativa (α=0.05) | Sim          |
 
 ## Gráficos Gerados
 

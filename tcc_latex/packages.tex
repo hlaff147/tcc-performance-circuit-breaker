@@ -1,0 +1,37 @@
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{inconsolata}
+\usepackage{adjustbox}
+\usepackage{float}
+
+% Cores para listings
+\definecolor{pblue}{rgb}{0.13,0.13,1}
+\definecolor{javagreen}{rgb}{0,0.5,0}
+\definecolor{javapurple}{rgb}{0.5,0,0.5}
+\definecolor{javadocblue}{rgb}{0,0,1}
+\definecolor{cinza}{HTML}{FCF8F8}
+
+% Configuração do listings
+\lstset{
+    language=Java,
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\color{javapurple}\bfseries,
+    stringstyle=\color{pblue},
+    commentstyle=\color{javagreen},
+    morecomment=[s][\color{javadocblue}]{/**}{*/},
+    morecomment=[s][\color{gray}]{@}{\ },
+    numbers=left,
+    numberstyle=\tiny\color{black},
+    backgroundcolor=\color{cinza},
+    stepnumber=1,
+    numbersep=8pt,
+    xleftmargin=14pt,
+    tabsize=4,
+    showspaces=false,
+    showstringspaces=false,
+    breaklines=true,
+    frame=single,
+    rulecolor=\color{black}
+}

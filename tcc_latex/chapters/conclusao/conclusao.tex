@@ -1,0 +1,93 @@
+\chapter{Conclusão}
+\label{cap:conclusao}
+
+\section{Revisão dos Objetivos e do Problema}
+Este trabalho se propôs a investigar a fragilidade da comunicação síncrona em microsserviços, especificamente o risco de falhas em cascata em um sistema de pagamentos. O objetivo foi avaliar quantitativamente o impacto do padrão Circuit Breaker no desempenho e resiliência, usando um experimento prático e reprodutível com \texttt{Docker} e \texttt{k6}.
+
+\section{Síntese dos Resultados}
+Os resultados experimentais foram conclusivos e demonstraram de forma inequívoca o valor do padrão Circuit Breaker, bem como as limitações do padrão Retry quando usado isoladamente:
+
+\begin{itemize}
+    \item \textbf{Disponibilidade Total:} A V2 (Circuit Breaker) foi a \textbf{única} versão a alcançar 100\% de disponibilidade, eliminando completamente falhas visíveis ao usuário através do mecanismo de fallback.
+    \item \textbf{Superioridade sobre Retry:} A V3 (Retry com backoff exponencial) apresentou taxa de sucesso idêntica à V1 (89,99\% vs 89,97\%), demonstrando que \textbf{Retry sozinho não melhora disponibilidade} em cenários de falha persistente.
+    \item \textbf{Melhoria de Performance:} O tempo médio de resposta da V2 foi de 179ms contra 534ms da V1 (\textbf{-66,5\%}), enquanto a V3 teve o pior desempenho com 722ms (\textbf{+35\%} em relação à V1) devido às retentativas.
+    \item \textbf{Aumento de Throughput:} A V2 processou 289 req/s contra 222 req/s da V1 (\textbf{+30\%}) e 198 req/s da V3 (\textbf{+46\%}).
+    \item \textbf{Análise Estatística:} O teste de Mann-Whitney confirmou diferença significativa (p $<$ 0,001), e o Cliff's Delta ($\delta = 0,594$) indica \textbf{effect size grande}, confirmando relevância prática substancial e não resultado do acaso.
+    \item \textbf{Elasticidade:} O CB demonstrou capacidade de transicionar dinamicamente entre estados conforme o comportamento da dependência, abrindo e fechando o circuito conforme necessário.
+\end{itemize}
+
+A arquitetura Baseline (V1) e a versão com Retry (V3) provaram ser \textbf{inadequadas para produção} em sistemas de missão crítica, enquanto a V2 (Circuit Breaker) demonstrou robustez excepcional, protegendo o \texttt{servico-pagamento} e garantindo disponibilidade percebida pelo usuário através da degradação graciosa (HTTP 202). Os resultados são particularmente relevantes para sistemas financeiros, e-commerce e qualquer domínio onde a disponibilidade é requisito crítico.
+
+\section{Contribuições do Trabalho}
+Este TCC contribui para a literatura ao fornecer:
+\begin{enumerate}
+    \item \textbf{Evidência Empírica Robusta:} Dados quantitativos que demonstram o impacto real do Circuit Breaker em cenários realistas de falha, com mais de 1.278.000 requisições analisadas (V1 + V2 + V3).
+    \item \textbf{Comparação entre Padrões:} Primeira análise comparativa entre Circuit Breaker e Retry isolado, demonstrando que Retry \textbf{não substitui} o CB.
+    \item \textbf{Análise Estatística Rigorosa:} Aplicação de testes não-paramétricos (Mann-Whitney U, Kolmogorov-Smirnov) e medidas de effect size (Cliff's Delta = 0,594 --- \textbf{grande}) que confirmam relevância prática substancial.
+    \item \textbf{Metodologia Reprodutível:} Um framework de testes com Docker e k6 que pode ser replicado para avaliar outros padrões de resiliência.
+    \item \textbf{Quantificação de Benefícios:} Demonstração de melhorias de 100\% de disponibilidade, 66,5\% em tempo médio de resposta e 30\% em throughput.
+\end{enumerate}
+
+\section{Limitações do Estudo}
+Apesar dos resultados expressivos, este trabalho apresenta limitações que devem ser consideradas na interpretação dos achados:
+
+\begin{enumerate}
+    \item \textbf{POC Simplificada:} O sistema experimental é uma Prova de Conceito intencionalmente rudimentar, sem banco de dados, cache, autenticação ou lógica de negócio complexa. Sistemas de produção reais possuem mais variáveis que podem interagir com o comportamento do Circuit Breaker.
+    
+    \item \textbf{Ambiente Local:} Os experimentos foram executados em uma única máquina, sem latência de rede real entre serviços. Em ambientes distribuídos (multi-datacenter, cloud), a latência adicional pode influenciar os resultados.
+    
+    \item \textbf{Carga Sintética:} O k6 gera tráfego sintético com padrões uniformes. Tráfego real apresenta características mais complexas: rajadas imprevisíveis, sazonalidade e correlação entre requisições.
+    
+    \item \textbf{Serviço Adquirente Mockado:} O \texttt{servico-adquirente} foi implementado com falhas controladas e determinísticas. Em produção, falhas são frequentemente parciais e imprevisíveis.
+    
+    \item \textbf{Execução Única:} Cada cenário foi executado uma vez por versão. Múltiplas execuções permitiriam calcular intervalos de confiança e validar reprodutibilidade.
+    
+    \item \textbf{Configuração Fixa do CB:} Apenas uma configuração do Circuit Breaker foi testada. Diferentes parametrizações podem resultar em comportamentos distintos.
+    
+    \item \textbf{Domínio Específico:} Embora o contexto de pagamentos seja generalizável, outros domínios podem ter requisitos específicos (ex: latência ultra-baixa em trading) que influenciam a aplicabilidade dos resultados.
+\end{enumerate}
+
+\section{Ameaças à Validade}
+Identificamos as seguintes ameaças à validade dos resultados:
+
+\textbf{Validade Interna:}
+\begin{itemize}
+    \item \textbf{Variabilidade do ambiente:} Processos em segundo plano no sistema operacional, garbage collection da JVM e contenção de recursos do Docker podem introduzir variância nos resultados.
+    \item \textbf{Warm-up da JVM:} A compilação JIT (Just-In-Time) pode afetar os primeiros minutos de cada teste. Mitigamos isso com fases de aquecimento nos scripts k6.
+    \item \textbf{Ordem de execução:} Os testes foram executados sequencialmente; efeitos de ordem (ex: fragmentação de memória) não foram controlados.
+\end{itemize}
+
+\textbf{Validade Externa:}
+\begin{itemize}
+    \item \textbf{Generalização:} Os resultados são específicos para o domínio de pagamentos e a stack tecnológica utilizada (Java/Spring). Outros domínios e tecnologias podem apresentar comportamentos diferentes.
+    \item \textbf{Escala:} O experimento utilizou até 200 VUs (usuários virtuais). Sistemas de produção podem enfrentar milhares de requisições simultâneas, alterando a dinâmica de contenção.
+    \item \textbf{Complexidade arquitetural:} O experimento envolveu apenas dois serviços. Arquiteturas reais com dezenas de microsserviços introduzem cadeias de dependência mais complexas.
+\end{itemize}
+
+\textbf{Validade de Construção:}
+\begin{itemize}
+    \item \textbf{Definição de sucesso:} Consideramos HTTP 200 e HTTP 202 (fallback) como sucesso. Em contextos onde o fallback não é aceitável pelo negócio, a interpretação dos resultados seria diferente.
+    \item \textbf{Métricas selecionadas:} Focamos em taxa de sucesso, latência e throughput. Outras métricas (uso de CPU, memória, conexões abertas) poderiam revelar aspectos adicionais.
+\end{itemize}
+
+\section{Trabalhos Futuros}
+Como trabalho futuro, sugere-se:
+\begin{enumerate}
+    \item \textbf{Comparação com Outros Padrões:} Expandir o experimento para comparar o Circuit Breaker com outros padrões de resiliência como Retry (com backoff exponencial), Bulkhead (isolamento de threads) e Rate Limiter, avaliando tanto o uso isolado quanto a composição destes padrões.
+    
+    \item \textbf{Análise Paramétrica:} Investigar sistematicamente o impacto de diferentes configurações do Circuit Breaker (ex: \texttt{slidingWindowSize}, \texttt{failureRateThreshold}, \texttt{waitDurationInOpenState}), identificando configurações ótimas para diferentes perfis de carga.
+    
+    \item \textbf{Cenários de Múltiplas Dependências:} Avaliar o comportamento do CB em arquiteturas com múltiplos serviços dependentes, investigando estratégias de Circuit Breaker por dependência versus Circuit Breaker global.
+    
+    \item \textbf{Comunicação Assíncrona:} Comparar os resultados com arquiteturas baseadas em mensageria (Apache Kafka, RabbitMQ), avaliando os trade-offs entre comunicação síncrona protegida por CB e comunicação assíncrona nativa.
+    
+    \item \textbf{Ambiente Cloud Distribuído:} Replicar os experimentos em ambiente cloud (AWS, GCP ou Azure) com serviços distribuídos geograficamente, introduzindo latência de rede real e avaliando o comportamento do CB em cenários de particionamento de rede.
+    
+    \item \textbf{Chaos Engineering:} Integrar ferramentas de Chaos Engineering (ex: Chaos Monkey, Litmus) para injeção de falhas aleatórias e contínuas, validando a robustez do Circuit Breaker em condições mais realistas e imprevisíveis.
+    
+    \item \textbf{Observabilidade Avançada:} Implementar distributed tracing (Jaeger, Zipkin) para correlacionar o estado do Circuit Breaker com traces de requisições, facilitando a análise de causa raiz em cenários complexos.
+    
+    \item \textbf{Machine Learning para Tuning:} Explorar o uso de algoritmos de aprendizado de máquina para ajuste dinâmico dos parâmetros do Circuit Breaker com base em padrões históricos de tráfego e falhas.
+    
+    \item \textbf{Estudo Longitudinal:} Conduzir um estudo de longo prazo em ambiente de produção para avaliar a eficácia do Circuit Breaker ao longo de meses, capturando eventos reais de degradação e falha.
+\end{enumerate}

@@ -1,0 +1,259 @@
+\chapter{Detalhes da Implementação dos Serviços}
+\label{cap:implementacao}
+
+Este capítulo apresenta a documentação técnica das três versões do serviço de pagamento desenvolvidas para o experimento, detalhando a API, a arquitetura e as configurações de resiliência.
+
+\section{Visão Geral}
+
+\subsection{Arquitetura de Alto Nível}
+
+O fluxo principal da aplicação consiste em:
+
+\begin{enumerate}
+    \item O Cliente (k6, usuário ou outro sistema) realiza uma chamada HTTP ao \textbf{serviço de pagamento}.
+    \item O serviço de pagamento comunica-se com o \textbf{serviço adquirente} via \textbf{OpenFeign}.
+    \item O adquirente simula comportamentos (normal, latência ou falha) controlados pelo parâmetro de consulta \texttt{modo}.
+\end{enumerate}
+
+A integração com o adquirente ocorre através da chamada \texttt{POST /autorizar?modo=...}. Os endereços de host e porta são configurados estaticamente no cliente Feign, apontando para \texttt{http://servico-adquirente:8081}, o que facilita a execução em ambiente Docker Compose.
+
+\subsection{Comparativo das Versões}
+
+A Tabela \ref{tab:comparativo-versoes} resume as características das três versões implementadas.
+
+\begin{table}[H]
+\centering
+\caption{Comparativo das Versões do Serviço de Pagamento}
+\label{tab:comparativo-versoes}
+\begin{tabular}{@{}lp{3cm}p{4cm}p{4cm}@{}}
+\toprule
+\textbf{Versão} & \textbf{Objetivo} & \textbf{Resiliência} & \textbf{Observabilidade} \\ \midrule
+v1 & Baseline (controle) & Sem Circuit Breaker ou Retry & Health (Actuator) \\
+v2 & Circuit Breaker & \texttt{@CircuitBreaker} + fallback (202) & Health, CB endpoints, Métricas, Prometheus \\
+v3 & Retry & \texttt{@Retry} + fallback após esgotar tentativas & Health, Retry endpoints, Métricas, Prometheus \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\section{API HTTP}
+
+A API é comum às três versões e expõe o endpoint de pagamento.
+
+\subsection{Endpoint: POST /pagar}
+
+\begin{itemize}
+    \item \textbf{Path:} \texttt{/pagar}
+    \item \textbf{Método:} \texttt{POST}
+    \item \textbf{Query params:} \texttt{modo} (valores: \texttt{normal}, \texttt{latencia}, \texttt{falha})
+\end{itemize}
+
+O corpo da requisição espera um JSON com os campos \texttt{amount}, \texttt{payment\_method} e \texttt{customer\_id}. O Código \ref{lst:curl-pagar} demonstra um exemplo de chamada via cURL.
+
+\begin{lstlisting}[language=bash, caption={Exemplo de chamada cURL para o endpoint de pagamento}, label={lst:curl-pagar}]
+curl -i -X POST "http://localhost:8080/pagar?modo=normal" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "amount": 100.00,
+        "payment_method": "credit_card",
+        "customer_id": "customer-123",
+        "order_id": "order-999"
+      }'
+\end{lstlisting}
+
+\subsection{Semântica das Respostas}
+
+\begin{itemize}
+    \item \textbf{v1 (Baseline):} Retorna \texttt{200 OK} em sucesso ou \texttt{500 Internal Server Error} em caso de falha do adquirente.
+    \item \textbf{v2 (Circuit Breaker):} Retorna \texttt{200 OK} em sucesso, \texttt{500} para erros mapeados e \texttt{202 Accepted} quando o fallback é acionado (circuito aberto ou falha), indicando degradação graciosa.
+    \item \textbf{v3 (Retry):} Retorna \texttt{200 OK} em sucesso e \texttt{500} após esgotar todas as tentativas de retentativa. O fallback só é chamado ao final.
+\end{itemize}
+
+\section{Estrutura de Dados (DTOs)}
+
+\subsection{PaymentRequest}
+
+O DTO \texttt{PaymentRequest} mapeia os dados recebidos. O Código \ref{lst:payment-request} mostra a implementação do record Java.
+
+\begin{lstlisting}[language=Java, caption={Implementação do DTO PaymentRequest}, label={lst:payment-request}]
+public record PaymentRequest(
+  BigDecimal amount,
+  String paymentMethod,
+  String customerId,
+  Map<String, Object> additionalData
+) {
+  public static PaymentRequest fromMap(Map<String, Object> map) {
+    BigDecimal amount = map.get("amount") != null
+      ? new BigDecimal(map.get("amount").toString())
+      : BigDecimal.ZERO;
+    String paymentMethod = (String) map.getOrDefault("payment_method", "unknown");
+    String customerId = (String) map.getOrDefault("customer_id", "anonymous");
+
+    return new PaymentRequest(amount, paymentMethod, customerId, map);
+  }
+
+  public Map<String, Object> toMap() {
+    return additionalData != null ? additionalData : Map.of(
+      "amount", amount,
+      "payment_method", paymentMethod,
+      "customer_id", customerId
+    );
+  }
+}
+\end{lstlisting}
+
+\section{Versão v1 — Baseline}
+
+A versão v1 atua como grupo de controle, sem mecanismos avançados de resiliência.
+
+\subsection{Implementação do Controller e Service}
+
+O Controller (Código \ref{lst:v1-controller}) recebe a requisição e delega para o serviço.
+
+\begin{lstlisting}[language=Java, caption={Controller da versão Baseline (v1)}, label={lst:v1-controller}]
+@PostMapping(path = "/pagar")
+public ResponseEntity<String> pagar(@RequestParam("modo") String modo,
+                                    @RequestBody Map<String, Object> pagamento) {
+    PaymentRequest request = PaymentRequest.fromMap(pagamento);
+    PaymentResponse response = paymentService.processPayment(modo, request);
+    return ResponseEntity.status(response.status()).body(response.message());
+}
+\end{lstlisting}
+
+O Service (Código \ref{lst:v1-service}) realiza a chamada Feign direta.
+
+\begin{lstlisting}[language=Java, caption={Service da versão Baseline (v1)}, label={lst:v1-service}]
+ResponseEntity<String> response = acquirerClient.autorizarPagamento(modo, request.toMap());
+if (response.getStatusCode().is5xxServerError()) {
+    return PaymentResponse.failure("Erro do adquirente: " + response.getBody());
+}
+return PaymentResponse.success(response.getBody());
+\end{lstlisting}
+
+\subsection{Configuração}
+
+A configuração no \texttt{application.yml} define timeouts básicos para o cliente Feign.
+
+\begin{lstlisting}[language=yaml, caption={Configuração do Feign na v1}, label={lst:v1-config}]
+server:
+  port: 8080
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 2000
+        readTimeout: 2000
+\end{lstlisting}
+
+\section{Versão v2 — Circuit Breaker}
+
+A versão v2 utiliza o Resilience4j para implementar o padrão Circuit Breaker.
+
+\subsection{Implementação com Circuit Breaker}
+
+O método de processamento é anotado com \texttt{@CircuitBreaker}, definindo um método de fallback (Código \ref{lst:v2-service}).
+
+\begin{lstlisting}[language=Java, caption={Service com Circuit Breaker (v2)}, label={lst:v2-service}]
+@CircuitBreaker(name = "adquirente-cb", fallbackMethod = "processPaymentFallback")
+@Timed(value = "payment.processing.time")
+public PaymentResponse processPayment(String modo, PaymentRequest request) {
+    ResponseEntity<String> response = acquirerClient.autorizarPagamento(modo, request.toMap());
+    if (response.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
+        return PaymentResponse.failure("Serviço adquirente indisponível: " + response.getBody());
+    }
+    return PaymentResponse.success(response.getBody());
+}
+\end{lstlisting}
+
+O método de fallback (Código \ref{lst:v2-fallback}) trata a abertura do circuito retornando uma resposta de aceitação (202).
+
+\begin{lstlisting}[language=Java, caption={Método de Fallback (v2)}, label={lst:v2-fallback}]
+public PaymentResponse processPaymentFallback(String modo, PaymentRequest request, Throwable t) {
+    if (t instanceof CallNotPermittedException) {
+        return PaymentResponse.circuitBreakerOpen();
+    }
+    return PaymentResponse.fallback("Pagamento aceito para processamento posterior: " + t.getMessage());
+}
+\end{lstlisting}
+
+\subsection{Configuração do Circuit Breaker}
+
+O perfil \texttt{equilibrado} define os limiares de falha e janelas de tempo (Código \ref{lst:v2-config}).
+
+\begin{lstlisting}[language=yaml, caption={Configuração do Circuit Breaker (Perfil Equilibrado)}, label={lst:v2-config}]
+resilience4j:
+  circuitbreaker:
+    instances:
+      adquirente-cb:
+        failureRateThreshold: 50
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 5
+        slowCallDurationThreshold: 2000ms
+        slowCallRateThreshold: 80
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+\end{lstlisting}
+
+\section{Versão v3 — Retry}
+
+A versão v3 implementa retentativas com backoff exponencial.
+
+\subsection{Implementação com Retry}
+
+O serviço utiliza a anotação \texttt{@Retry} (Código \ref{lst:v3-service}).
+
+\begin{lstlisting}[language=Java, caption={Service com Retry (v3)}, label={lst:v3-service}]
+@Retry(name = "adquirente-retry", fallbackMethod = "processPaymentFallback")
+@Timed(value = "payment.processing.time")
+public PaymentResponse processPayment(String modo, PaymentRequest request) {
+    ResponseEntity<String> response = acquirerClient.autorizarPagamento(modo, request.toMap());
+
+    if (response.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
+        throw new RuntimeException("Serviço adquirente indisponível: " + response.getBody());
+    }
+
+    if (response.getStatusCode().is5xxServerError()) {
+        throw new RuntimeException("Erro no serviço adquirente: " + response.getBody());
+    }
+
+    return PaymentResponse.success(response.getBody());
+}
+\end{lstlisting}
+
+\subsection{Configuração do Retry}
+
+As configurações de backoff exponencial são definidas no \texttt{application.yml} (Código \ref{lst:v3-config}).
+
+\begin{lstlisting}[language=yaml, caption={Configuração do Retry (v3)}, label={lst:v3-config}]
+resilience4j:
+  retry:
+    instances:
+      adquirente-retry:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        enableRandomizedWait: true
+        randomizedWaitFactor: 0.5
+        retryExceptions:
+          - java.net.SocketTimeoutException
+          - java.net.ConnectException
+          - java.io.IOException
+          - feign.FeignException$ServiceUnavailable
+          - feign.FeignException$InternalServerError
+\end{lstlisting}
+
+\section{Execução com Docker Compose}
+
+O ambiente é orquestrado via Docker Compose, mapeando as portas para cada versão do serviço (Código \ref{lst:docker-compose}).
+
+\begin{lstlisting}[language=yaml, caption={Trecho do docker-compose.yml}, label={lst:docker-compose}]
+  servico-pagamento-v2:
+    ports:
+      - "8082:8080"
+
+  servico-pagamento-v3:
+    ports:
+      - "8083:8080"
+\end{lstlisting}
