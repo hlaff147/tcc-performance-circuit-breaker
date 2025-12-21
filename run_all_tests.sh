@@ -34,6 +34,7 @@ else
 fi
 
 mkdir -p "${K6_RESULTS_HOST_DIR}"
+chmod -R 777 "${K6_RESULTS_HOST_DIR}"
 
 SCENARIOS=(
   "Completo:cenario-completo.js"
