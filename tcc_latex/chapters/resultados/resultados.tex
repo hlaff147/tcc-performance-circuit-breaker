@@ -170,7 +170,177 @@ Melhoria Tempo Médio & \textemdash & \textbf{94,5\%} \\
 \label{fig:avg_response_times}
 \end{figure}
 
+\section{Análise Comparativa Detalhada: Rajadas e Catástrofe}
+
+Os cenários de \textbf{Rajadas Intermitentes} e \textbf{Falha Catastrófica} merecem uma análise mais aprofundada por demonstrarem de forma contundente os benefícios do padrão Circuit Breaker. Nesses dois cenários, observamos as maiores transformações na disponibilidade do sistema.
+
+\subsection{Por que estes cenários são críticos?}
+
+\textbf{Rajadas Intermitentes} simulam uma situação comum em produção: picos de tráfego ou falhas que ocorrem em ondas, exigindo que o sistema reaja rapidamente às mudanças de estado. Este cenário testa a \textbf{elasticidade} do Circuit Breaker --- sua capacidade de transicionar entre estados (Fechado $\rightarrow$ Aberto $\rightarrow$ Semiaberto $\rightarrow$ Fechado) de forma dinâmica.
+
+\textbf{Falha Catastrófica} representa o pior caso possível: a dependência externa fica 100\% indisponível por um período prolongado. Este cenário testa a \textbf{proteção máxima} do Circuit Breaker e sua capacidade de manter o sistema funcional mesmo quando a dependência falha completamente.
+
+\subsection{Comparação de Taxa de Sucesso}
+
+A Figura \ref{fig:v1_v2_success_comparison} apresenta a comparação direta de taxa de sucesso entre V1 (Baseline) e V2 (Circuit Breaker) para os dois cenários.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/01_v1_v2_success_rate_comparison.png}
+\caption{Comparação de taxa de sucesso V1 vs V2 -- Cenários Rajadas e Catástrofe}
+\label{fig:v1_v2_success_comparison}
+\end{figure}
+
+\textbf{Resultados Destacados:}
+\begin{itemize}
+    \item \textbf{Rajadas Intermitentes:} V1 alcançou apenas 63,0\% de sucesso, enquanto V2 atingiu \textbf{96,7\%}, um ganho de \textbf{+33,6 pontos percentuais}.
+    \item \textbf{Falha Catastrófica:} V1 registrou 35,7\% de sucesso (sistema praticamente inutilizável), enquanto V2 manteve \textbf{95,1\%}, um ganho extraordinário de \textbf{+59,3 pontos percentuais}.
+\end{itemize}
+
+\subsection{Composição das Respostas HTTP}
+
+A análise da composição das respostas HTTP revela o mecanismo pelo qual o Circuit Breaker transforma o comportamento do sistema. A Figura \ref{fig:response_composition} mostra como as respostas são distribuídas entre códigos HTTP 200 (sucesso direto), 202 (fallback) e 500 (erro).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/02_response_composition.png}
+\caption{Composição das respostas HTTP -- O Circuit Breaker transforma erros 500 em fallbacks 202}
+\label{fig:response_composition}
+\end{figure}
+
+\textbf{Observações Importantes:}
+\begin{enumerate}
+    \item \textbf{Transformação de Erros em Fallbacks:} Em V1, todas as requisições que falham resultam em HTTP 500. Em V2, o Circuit Breaker intercepta essas falhas e retorna HTTP 202 com uma mensagem informando que o pagamento foi agendado para processamento posterior.
+    
+    \item \textbf{Cenário Catástrofe -- Fallback como Salvação:} No cenário de falha catastrófica, 62,1\% das respostas em V2 vieram do fallback. Isso significa que o Circuit Breaker transformou requisições que seriam erros fatais em respostas úteis ao usuário.
+    
+    \item \textbf{Cenário Rajadas -- Fallback Seletivo:} No cenário de rajadas, 34,6\% das respostas vieram do fallback, demonstrando que o CB ativa o fallback apenas durante os picos de falha, liberando as requisições normais quando a dependência se recupera.
+\end{enumerate}
+
+\subsection{Redução de Falhas}
+
+A Figura \ref{fig:failure_reduction_detailed} quantifica a redução de falhas HTTP 500 proporcionada pelo Circuit Breaker.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/03_failure_reduction.png}
+\caption{Redução de falhas HTTP 500 -- Antes e depois do Circuit Breaker}
+\label{fig:failure_reduction_detailed}
+\end{figure}
+
+\textbf{Impacto Quantificado:}
+\begin{itemize}
+    \item \textbf{Rajadas:} Redução de falhas de \textbf{91,0\%} (de 37,0\% para 3,3\%)
+    \item \textbf{Catástrofe:} Redução de falhas de \textbf{92,3\%} (de 64,3\% para 4,9\%)
+\end{itemize}
+
+Estes resultados demonstram que o Circuit Breaker não elimina completamente as falhas (algumas ocorrem durante o período de detecção), mas reduz drasticamente sua frequência, transformando a maioria em respostas de degradação graciosa.
+
+\subsection{Redução de Downtime}
+
+A Figura \ref{fig:downtime_comparison} apresenta a comparação do tempo de indisponibilidade (downtime) entre V1 e V2.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/04_downtime_comparison.png}
+\caption{Comparação de downtime -- Circuit Breaker reduz tempo de indisponibilidade}
+\label{fig:downtime_comparison}
+\end{figure}
+
+\textbf{Redução de Downtime:}
+\begin{itemize}
+    \item \textbf{Rajadas:} Downtime de 4,82 min (V1) $\rightarrow$ 0,43 min (V2) --- redução de \textbf{91\%}
+    \item \textbf{Catástrofe:} Downtime de 8,37 min (V1) $\rightarrow$ 0,64 min (V2) --- redução de \textbf{92\%}
+\end{itemize}
+
+O downtime é calculado considerando o tempo em que o sistema retornou erros HTTP 500. Com o Circuit Breaker, o sistema mantém-se ``disponível'' do ponto de vista do usuário, pois retorna HTTP 202 (fallback) em vez de HTTP 500 durante as falhas da dependência.
+
+\subsection{Visão Consolidada}
+
+A Figura \ref{fig:combined_summary} apresenta uma visão consolidada de todas as métricas comparativas.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/05_combined_summary.png}
+\caption{Resumo consolidado do impacto do Circuit Breaker nos cenários Rajadas e Catástrofe}
+\label{fig:combined_summary}
+\end{figure}
+
+\subsection{Discussão dos Resultados}
+
+Os resultados obtidos nos cenários de Rajadas e Catástrofe validam três características fundamentais do padrão Circuit Breaker:
+
+\begin{enumerate}
+    \item \textbf{Fail-Fast com Degradação Graciosa:} Em vez de aguardar timeouts ou retornar erros, o sistema retorna imediatamente uma resposta alternativa significativa (HTTP 202). Isso preserva a experiência do usuário e a utilidade do sistema.
+    
+    \item \textbf{Elasticidade:} No cenário de rajadas, o Circuit Breaker demonstrou capacidade de abrir durante os picos de falha e fechar novamente quando a dependência se recuperou, maximizando tanto a proteção quanto a disponibilidade.
+    
+    \item \textbf{Proteção de Recursos:} Durante a catástrofe total, o Circuit Breaker evitou que threads ficassem bloqueadas aguardando respostas de uma dependência indisponível, liberando recursos para processar outras requisições.
+\end{enumerate}
+
+\subsection{Eficácia do Mecanismo de Detecção: Análise Técnica}
+
+Um aspecto notável dos resultados é a capacidade do Circuit Breaker de ``antecipar'' corretamente os cenários de falha através do seu mecanismo de detecção baseado em \textbf{sliding window} (janela deslizante). Esta seção analisa tecnicamente como o CB conseguiu ativar o fallback predominantemente durante os períodos de falha real, enquanto maximizou o aproveitamento dos períodos saudáveis.
+
+\textbf{Mecanismo de Detecção por Janela Deslizante:}
+
+O Circuit Breaker implementado utiliza uma configuração de sliding window com os seguintes parâmetros:
+\begin{itemize}
+    \item \texttt{slidingWindowSize}: 10 requisições
+    \item \texttt{failureRateThreshold}: 50\%
+    \item \texttt{waitDurationInOpenState}: 5 segundos
+    \item \texttt{permittedNumberOfCallsInHalfOpenState}: 3 requisições
+\end{itemize}
+
+A máquina de estados do CB opera da seguinte forma:
+\begin{enumerate}
+    \item \textbf{Estado FECHADO:} O CB monitora as últimas 10 requisições. Quando a taxa de falhas ultrapassa 50\% (5 ou mais falhas em 10 requisições), o circuito abre.
+    
+    \item \textbf{Estado ABERTO:} Todas as requisições são imediatamente direcionadas ao fallback, sem tentar a dependência externa. O circuito permanece aberto por 5 segundos.
+    
+    \item \textbf{Estado SEMIABERTO:} Após 5 segundos, o CB permite 3 requisições de teste. Se essas requisições forem bem-sucedidas, o circuito fecha. Caso contrário, retorna ao estado aberto.
+\end{enumerate}
+
+\textbf{Correlação entre Estado do CB e Falhas Reais:}
+
+Os dados demonstram uma correlação forte entre as transições de estado do CB e os períodos de falha real da dependência:
+
+\begin{itemize}
+    \item \textbf{Cenário Catástrofe:} Durante os 5 minutos de indisponibilidade total, o CB permaneceu predominantemente no estado ABERTO, acionando o fallback para 62,1\% das requisições. As primeiras 5-10 requisições após o início da falha resultaram em HTTP 500 (necessárias para detectar a falha), mas as subsequentes já foram protegidas pelo fallback.
+    
+    \item \textbf{Cenário Rajadas:} A natureza intermitente das falhas testou a elasticidade do CB. O mecanismo de sliding window reagiu rapidamente às ondas de falha, abrindo o circuito durante os picos e fechando-o durante os períodos de recuperação. Isso resultou em 34,6\% de fallback --- significativamente menor que no cenário de catástrofe --- demonstrando que o CB \textbf{não aplicou fallback desnecessariamente} durante os períodos saudáveis.
+\end{itemize}
+
+\textbf{Análise da Taxa de Fallback vs. Taxa de Erro:}
+
+A relação entre a taxa de fallback da V2 e a taxa de erro da V1 (que representa a taxa de falha ``real'' da dependência) é reveladora:
+
+\begin{table}[H]
+\centering
+\caption{Correlação entre fallback V2 e falhas V1}
+\label{tab:correlacao-fallback}
+\begin{tabular}{lccc}
+\toprule
+Cenário & V1 Falhas (\%) & V2 Fallback (\%) & Cobertura (\%) \\
+\midrule
+Rajadas & 37,0\% & 34,6\% & 93,5\% \\
+Catástrofe & 64,3\% & 62,1\% & 96,6\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A \textbf{taxa de cobertura} (calculada como $\frac{\text{Fallback V2}}{\text{Falhas V1}} \times 100$) indica que o CB conseguiu ``cobrir'' mais de 93\% dos cenários onde ocorreriam falhas reais. Os erros residuais em V2 (3,3\% em Rajadas e 4,9\% em Catástrofe) correspondem principalmente às requisições iniciais necessárias para o CB detectar a degradação --- um custo inevitável e aceitável do mecanismo de detecção.
+
+\textbf{Transições de Estado e Aproveitamento de Períodos Saudáveis:}
+
+No cenário de Rajadas, a diferença entre as taxas de sucesso direto (HTTP 200) de V1 (63,0\%) e V2 (62,0\%) foi de apenas 1 ponto percentual. Isso demonstra que o CB \textbf{não bloqueou requisições desnecessariamente} --- durante os períodos em que a dependência estava saudável, o circuito permanecia fechado, permitindo respostas diretas.
+
+Esta característica de ``fail-fast inteligente'' é possível graças ao mecanismo de half-open state, que permite ao CB ``sondar'' periodicamente a saúde da dependência e reabrir o fluxo normal assim que a recuperação é detectada.
+
+\textbf{Conclusão desta análise:} Os cenários de Rajadas e Catástrofe demonstram inequivocamente que o Circuit Breaker é uma ferramenta essencial para garantir a resiliência de microsserviços que dependem de APIs externas. A melhoria de mais de 90\% na redução de falhas e o ganho de até 59 pontos percentuais na taxa de sucesso justificam plenamente a adoção deste padrão em sistemas de produção crítica.
+
 \section{Análise de Tempos de Resposta}
+
 
 \begin{figure}[H]
 \centering
