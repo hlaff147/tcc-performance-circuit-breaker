@@ -12,6 +12,15 @@ The POC comprises two Spring Boot microservices packaged as Docker containers:
     \item \textbf{acquirer-service}: Simulates an external payment gateway with configurable behavior (normal, latency, or failure mode).
 \end{itemize}
 
+Figure~\ref{fig:architecture} summarizes the simplified architecture used throughout the experiments.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{arquitetura_simplificada.png}
+\caption{Simplified architecture of the experimental microservices ecosystem.}
+\label{fig:architecture}
+\end{figure}
+
 Three versions of payment-service were developed:
 \begin{itemize}
     \item \textbf{V1 (Baseline)}: Basic timeouts only (2s);
@@ -53,5 +62,11 @@ Normal & 10min & 100 & 100\% healthy \\
 \subsection{Metrics and Statistical Analysis}
 
 Collected metrics include: http\_reqs (throughput), http\_req\_duration\{p(95)\} (latency percentile), and http\_req\_failed (error rate).
+
+To reflect user-visible continuity of service, we define \textbf{Perceived Availability} as the fraction of requests that result in either a successful outcome (HTTP 200/201) or a graceful degradation outcome delivered through the fallback mechanism (HTTP 202). Following HTTP semantics, HTTP 202 (Accepted) indicates that the request has been accepted for processing, which is suitable for our “scheduled payment” fallback \cite{rfc9110}.
+
+\[
+A_p = \frac{n_{200} + n_{201} + n_{202}}{n_{\text{total}}}
+\]
 
 Statistical validation employed: Student's t-test for comparing V1 vs V2, ANOVA for three-group comparison (V1, V2, V3), and Cohen's d for effect size quantification.

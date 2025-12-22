@@ -157,10 +157,10 @@ O método de processamento é anotado com \texttt{@CircuitBreaker}, definindo um
 @Timed(value = "payment.processing.time")
 public PaymentResponse processPayment(String modo, PaymentRequest request) {
     ResponseEntity<String> response = acquirerClient.autorizarPagamento(modo, request.toMap());
-    // 503 do adquirente -> lanca excecao para contabilizar no CB
-    if (response.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
+  // 5xx do adquirente -> lanca excecao para contabilizar no CB
+  if (response.getStatusCode().is5xxServerError()) {
         failureCounter.increment();
-        throw new RuntimeException("Servico adquirente indisponivel: " + response.getBody());
+    throw new RuntimeException("Erro no servico adquirente: " + response.getBody());
     }
     successCounter.increment();
     return PaymentResponse.success(response.getBody());

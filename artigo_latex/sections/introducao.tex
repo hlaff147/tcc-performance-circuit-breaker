@@ -3,6 +3,8 @@
 
 The microservices architecture has become ubiquitous in organizations building large-scale digital platforms that require continuous availability and accelerated evolution cycles \cite{newman2021}. E-commerce ecosystems and payment processing systems exemplify this movement, demanding flexibility, fault tolerance, and rapid adaptation to variable transaction volumes.
 
+In this study, we focus on \textbf{Perceived Availability}: the proportion of requests that result in either a successful outcome (HTTP 200/201) or a graceful degradation outcome delivered through a fallback (HTTP 202).
+
 While partitioning functionality into independent services facilitates parallel development and selective scalability, this logical independence relies on real-time interactions between services, typically through REST APIs and declarative clients like Spring Cloud OpenFeign. Synchronous communication simplifies implementation and observability but introduces strong temporal coupling: the consumer service remains blocked until the dependent service responds or a timeout occurs \cite{nygard2018}.
 
 \subsection{Problem Statement}

@@ -22,7 +22,7 @@ O ambiente experimental será composto por dois microsserviços desenvolvidos em
 - **Controle Experimental:** o comportamento é configurável via o parâmetro de query `?modo=`:
   - `modo=normal`: responde em aproximadamente 50 ms com HTTP 200 (OK).
   - `modo=latencia`: responde em 3000 ms (utilizando `Thread.sleep()`) com HTTP 200 (OK).
-  - `modo=falha`: responde imediatamente com HTTP 503 (Service Unavailable).
+  - `modo=falha`: responde imediatamente com HTTP 500 (Internal Server Error).
 
 ### 3.2 `servico-pagamento` — Sistema Sob Teste
 - **Função:** orquestrar o fluxo de pagamento exposto aos clientes finais e consumir o `servico-adquirente` síncronamente.
@@ -55,7 +55,7 @@ Três scripts de teste serão desenvolvidos em k6, e cada um deles será executa
 
 ### 5.3 Cenário C — Falha Total do Adquirente
 - **URL invocada:** `POST /pagar?modo=falha`.
-- **Objetivo:** testar a resiliência diante de falha total do `servico-adquirente` (HTTP 503 imediato).
+- **Objetivo:** testar a resiliência diante de falha total do `servico-adquirente` (HTTP 500 imediato).
 - **Thresholds:** `http_req_failed < 0.01`. A versão Baseline deve falhar, enquanto a versão com Circuit Breaker e fallback deve passar, retornando HTTP 202 e mantendo a disponibilidade do serviço de pagamentos.
 
 Com este design experimental, os resultados quantitativos obtidos pelo k6 permitirão comparar de maneira objetiva o impacto do padrão Circuit Breaker na manutenção de vazão, na redução da latência percebida e na mitigação de falhas durante cenários adversos, fornecendo a validação empírica proposta por este TCC.

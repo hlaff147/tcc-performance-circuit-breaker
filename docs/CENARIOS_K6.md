@@ -17,7 +17,6 @@ Os testes simulam diferentes padrões de falha do `servico-adquirente` para aval
 | 200/201 | Sucesso real | API funcionou |
 | 202 | Fallback (pagamento agendado) | Circuit Breaker aberto (V2) |
 | 500 | Erro da API externa | Falha propagada |
-| 503 | CB explicitamente aberto | Circuit Breaker rejeitando |
 
 ---
 
@@ -176,7 +175,7 @@ Indisponib.     ██            █████████████  +86.9
 - `custom_success_responses` - HTTP 200/201
 - `custom_fallback_responses` - HTTP 202 (degradação graciosa)
 - `custom_api_failures` - HTTP 500
-- `custom_circuit_breaker_open` - HTTP 503
+- `custom_circuit_breaker_open` - HTTP 202
 - `custom_success_rate` - Taxa de sucesso real
 - `custom_availability_rate` - Disponibilidade percebida (200 + 202)
 

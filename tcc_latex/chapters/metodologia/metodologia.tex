@@ -98,7 +98,6 @@ O \texttt{servico-pagamento} pode retornar diferentes códigos HTTP dependendo d
 200/201 & Sucesso real & API funcionou & V1, V2 \\
 202 & Fallback (pagamento agendado) & CB aberto & V2 \\
 500 & Erro da API externa & Falha propagada & V1, V2 \\
-503 & CB rejeitando requisições & CB aberto & V2 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -128,6 +127,8 @@ O código HTTP 202 (Accepted) é particularmente importante pois representa a \t
     \item \textbf{\texttt{http\_req\_failed}:} taxa de requisições consideradas falhas pelo k6, refletindo a resiliência percebida.
     \item \textbf{Coeficiente de Variação (CV):} razão entre o desvio padrão e a média do tempo de resposta, utilizada para medir a consistência e previsibilidade do sistema. Valores menores indicam maior estabilidade.
 \end{itemize}
+
+\input{chapters/metodologia/pos_processamento_paralelismo}
 
 \section{Plano de Execução — Cenários de Teste k6}
 Quatro cenários de teste foram desenvolvidos em k6, cada um projetado para exercitar diferentes aspectos do comportamento do sistema sob estresse. Cada cenário foi executado duas vezes: uma para a versão Baseline (V1) e outra para a versão com Circuit Breaker (V2). Os cenários utilizam de 50 a 200 usuários virtuais (VUs) com duração variável para simular diferentes padrões de carga realistas.

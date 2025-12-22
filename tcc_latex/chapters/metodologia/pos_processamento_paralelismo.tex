@@ -1,0 +1,41 @@
+\section{Coleta, Exportação e Pós-processamento dos Resultados}
+\label{sec:posprocessamento}
+
+Além de definir cenários de carga e coletar métricas, a condução do experimento exige um processo reprodutível para \textbf{exportar}, \textbf{armazenar} e \textbf{analisar} resultados em escala. Nesta pesquisa, os testes com \texttt{k6} geram arquivos de telemetria (séries temporais) que são pós-processados em Python, com uso de \textbf{cache em Parquet} e \textbf{paralelismo} para reduzir o tempo de análise e viabilizar reexecuções.
+
+\subsection{Como o k6 executa a carga e mede o sistema}
+O \texttt{k6} é uma ferramenta de testes de carga em que os cenários são programados em JavaScript e executados por \textbf{usuários virtuais} (\textit{Virtual Users} -- VUs). Cada VU representa um fluxo de requisições concorrente ao longo do tempo, permitindo:
+\begin{itemize}
+    \item \textbf{Modelar padrões de carga} por estágios (ramp-up, platô e ramp-down), aproximando o comportamento de picos e quedas observados em produção.
+    \item \textbf{Coletar métricas} de latência, vazão e falhas a partir do ponto de vista do cliente (o gerador de carga), incluindo percentis (p95/p99) e taxas de erro.
+    \item \textbf{Validar limites} por meio de \textit{thresholds}, que funcionam como critérios automáticos para detecção de degradação (por exemplo, p95 máximo aceitável).
+\end{itemize}
+
+\subsection{Formatos de saída do k6 (NDJSON e Summary JSON)}
+Para permitir análise detalhada e reprodutível, são utilizados dois formatos de exportação:
+\begin{itemize}
+    \item \textbf{Saída de série temporal em JSON (NDJSON):} ao executar o \texttt{k6} com \texttt{--out json=...}, o resultado é escrito como \textit{NDJSON} na prática (um objeto JSON por linha). Nesse arquivo, os pontos de métricas aparecem como eventos do tipo \texttt{"type":"Point"}. Esse formato é adequado para streaming e geração incremental, porém pode produzir arquivos grandes.
+    \item \textbf{Summary JSON:} ao executar o \texttt{k6} com \texttt{--summary-export ...}, é gerado um JSON agregado com contagens, taxas e percentis. Esse artefato é útil para \textbf{quantificação confiável} (por exemplo, \texttt{http\_reqs.count} e \texttt{http\_reqs.rate}) e para validação cruzada dos valores obtidos via séries temporais.
+\end{itemize}
+
+\subsection{Pipeline de pós-processamento e cache em Parquet}
+Os arquivos NDJSON são pós-processados por scripts em Python com foco em desempenho. O fluxo segue o padrão:
+\begin{enumerate}
+    \item Leitura e filtragem das linhas relevantes (eventos \texttt{"type":"Point"}).
+    \item Conversão para estrutura tabular (DataFrame) para cálculo de métricas e geração de relatórios.
+    \item Persistência de um \textbf{cache em Parquet} para acelerar reexecuções.
+\end{enumerate}
+
+O uso de Parquet se justifica por ser um formato colunar eficiente para leitura seletiva, reduzindo custo de CPU e I/O em análises subsequentes. O cache é salvo com compressão (por exemplo, \texttt{snappy}), e é reutilizado quando o arquivo \texttt{.parquet} correspondente é mais recente do que o JSON de origem.
+
+Um cuidado prático do pipeline é o tratamento de campos estruturados (por exemplo, \texttt{tags}). Como esses campos podem ser objetos (dicionários/listas), o pós-processamento serializa esses valores para string JSON ao gravar no Parquet e, quando necessário, reidrata a estrutura ao ler o cache.
+
+\subsection{Paralelismo na análise (threads) e em execuções (ambientes isolados)}
+A redução do tempo total do experimento ocorre em dois níveis:
+\begin{itemize}
+    \item \textbf{Paralelismo no parsing e preparação dos dados:} o pós-processamento divide o NDJSON em \textit{chunks} e utiliza múltiplas threads para converter e consolidar dados de forma mais rápida, principalmente quando o gargalo está em I/O e parsing. Para arquivos muito grandes, pode ser adotada uma estratégia de \textit{sampling} (por exemplo, \textit{reservoir sampling}) para manter a análise viável sem descaracterizar tendências gerais.
+    \item \textbf{Execução paralela dos testes com isolamento:} para acelerar campanhas completas (comparando múltiplas versões), é possível executar os testes de carga em paralelo, cada qual apontando para um ambiente Docker isolado por versão, evitando colisão de portas e minimizando interferência entre experimentos. A automação do repositório inclui um modo paralelo que sobe múltiplos \texttt{docker-compose} dedicados e executa o \texttt{k6} simultaneamente.
+\end{itemize}
+
+\subsection{Artefatos gerados e reprodutibilidade}
+O pipeline produz artefatos de análise (tabelas CSV/Markdown, gráficos e relatórios HTML) organizados em \texttt{analysis\_results/}. A execução ponta-a-ponta (testes + pós-processamento + geração de relatórios) é orquestrada por scripts do repositório, permitindo regenerar resultados de forma consistente ao longo da escrita do trabalho.

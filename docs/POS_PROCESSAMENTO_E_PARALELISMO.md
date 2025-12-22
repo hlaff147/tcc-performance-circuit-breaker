@@ -107,7 +107,7 @@ O script principal é [analysis/scripts/analyzer.py](analysis/scripts/analyzer.p
 Exemplos do que ele calcula:
 - `Total Requests` (via métrica `http_reqs` dentro do NDJSON)
 - latência (métrica `http_req_duration`) com `Avg`, `P95`, etc
-- taxas por status (`200`, `202`, `500`, `503`)
+- taxas por status (`200`, `201`, `202`, `500`)
 
 ### 2) Cenários críticos (catástrofe, degradação, rajadas, indisponibilidade, normal)
 

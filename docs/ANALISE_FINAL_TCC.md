@@ -43,7 +43,7 @@ Este documento apresenta a **análise completa e definitiva** dos experimentos r
 
 ### 🎯 Principais Descobertas
 1. ✅ **Disponibilidade com CB fica ≥94% em todos os cenários e alcança 97%** na indisponibilidade extrema, enquanto o baseline caiu para 10%.
-2. ✅ **Fallback responde de 59% a 93% das requisições** nas falhas massivas, entregando HTTP 202 previsível em vez de 500/503.
+2. ✅ **Fallback responde de 59% a 93% das requisições** nas falhas massivas, entregando HTTP 202 previsível em vez de 500.
 3. ✅ **Falhas efetivas despencam entre 4% e 97%** (45% na catástrofe e 97% no cenário 75% OFF), mantendo a experiência consistente.
 4. ✅ **Downtime comparativo mostra ganhos claros:** 487s → 16s na indisponibilidade extrema e 78s → 43s na catástrofe (Gráfico 11).
 5. ⚖️ **Trade-offs permanecem baixos:** throughput fica dentro da mesma ordem de magnitude e o short-circuit reduz a latência média em 60% (catástrofe) e 75% (indisponibilidade), mesmo com P99 próximos devido a timeouts herdados.

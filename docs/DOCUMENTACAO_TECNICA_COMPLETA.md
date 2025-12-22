@@ -187,10 +187,10 @@ O **Retry** é outro padrão de resiliência que tenta executar operações múl
 |------|---------------|:-----------:|-----|
 | `normal` | Resposta imediata (0-50ms) | 200 | Operação padrão |
 | `latencia` | Delay de 2000-3000ms | 200 | Simula carga alta |
-| `falha` | Erro imediato | 503 | Simula indisponibilidade |
+| `falha` | Erro imediato | 500 | Simula indisponibilidade |
 | `timeout` | Delay de 15s | 200 | Testa timeout do cliente |
-| `parcial` | 50% chance sucesso/falha | 200/503 | Testa threshold do CB |
-| `degradacao` | Comportamento aleatório | 200/503 | Simula degradação progressiva |
+| `parcial` | 50% chance sucesso/falha | 200/500 | Testa threshold do CB |
+| `degradacao` | Comportamento aleatório | 200/500 | Simula degradação progressiva |
 
 **Código Relevante:**
 ```java

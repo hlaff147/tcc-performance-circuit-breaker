@@ -5,7 +5,7 @@
 ### 🎯 O Que Foi Corrigido?
 
 Circuit Breaker **NÃO PODE** ter 0% de erro. Agora rastreamos:
-- ✅ Falhas reais (500/503) que **ATIVAM** o CB
+- ✅ Falhas reais (500) que **ATIVAM** o CB
 - ✅ Fallbacks (202) quando CB está **ATIVO**
 - ✅ Sucessos reais (200)
 - ✅ Taxa de erro **REAL** (10-20% esperado)
@@ -73,7 +73,7 @@ if (response.status === 200) {
 } else if (response.status === 202) {
   fallbackResponses.add(1);        // Circuit Breaker ATIVO
   // NÃO conta como erro na taxa
-} else if (response.status === 500 || response.status === 503) {
+} else if (response.status === 500) {
   realFailures.add(1);             // Falha REAL
   errorRate.add(true);             // É ERRO que ativa o CB
 }
@@ -82,7 +82,7 @@ if (response.status === 200) {
 ### 📊 Métricas Implementadas
 
 #### 1. **Falhas Reais** (`real_failures`)
-- **O que é:** Requisições que retornam HTTP 500 ou 503
+- **O que é:** Requisições que retornam HTTP 500
 - **Quando ocorre:** ANTES do Circuit Breaker ativar
 - **Importância:** São estas falhas que ATIVAM o Circuit Breaker
 
@@ -97,7 +97,7 @@ if (response.status === 200) {
 - **Importância:** Transações processadas com sucesso
 
 #### 4. **Taxa de Erro do Circuit Breaker** (`circuit_breaker_error_rate`)
-- **O que é:** Percentual de requisições que FALHARAM (500/503)
+- **O que é:** Percentual de requisições que FALHARAM (500)
 - **Cálculo:** `(real_failures / total_requests) * 100`
 - **Importância:** Taxa que determina quando o CB abre
 
@@ -113,7 +113,7 @@ if (response.status === 200) {
    └─> Requisições normais (HTTP 200)
 
 2️⃣ DETECTA FALHAS
-   └─> 10-20 requisições retornam 500/503
+  └─> 10-20 requisições retornam 500
    └─> Taxa de erro > 50%
    └─> Circuit Breaker ABRE
 
@@ -156,7 +156,7 @@ if (response.status === 200) {
 ```
 
 **Interpretação:**
-1. **Primeiras 10-20 requisições:** Falham (500/503) → CB detecta
+1. **Primeiras 10-20 requisições:** Falham (500) → CB detecta
 2. **Circuit Breaker ABRE:** Próximas requisições retornam 202 (fallback)
 3. **A cada 10s:** CB testa recuperação (HALF_OPEN) → geralmente falha
 4. **Ciclo se repete:** 500+ mudanças de estado registradas
@@ -210,7 +210,7 @@ EXPLICAÇÃO DAS MÉTRICAS DO CIRCUIT BREAKER
 ================================================================================
 
 📊 V2 (Com Circuit Breaker):
-  • Falhas Reais: 8.431 requisições retornaram 500/503
+  • Falhas Reais: 8.431 requisições retornaram 500
     → Estas falhas ATIVARAM o Circuit Breaker
 
   • Respostas Fallback: 36.380 requisições retornaram 202
@@ -262,14 +262,14 @@ O Circuit Breaker **FUNCIONA PERFEITAMENTE**, mas agora as métricas refletem a 
 | Total Requests | 48.658 | 63.789 | ✅ +31% throughput |
 | **Sucesso (200)** | 89.9% | **32.8%** | ❌ **Muito baixo!** |
 | Falhas (500) | 10.1% | 3.9% | ✅ Reduziu falhas |
-| **CB Aberto (503)** | 0% | **63.3%** | ❌ **Bloqueando demais** |
+| **Fallback (202)** | 0% | **63.3%** | ❌ **Degradação excessiva** |
 | Tempo Médio | 602ms | 220ms | ✅ 63% mais rápido |
 
 #### 🔴 Problemas Identificados:
 
 1. **CB abre corretamente durante catástrofe** ✅
 2. **MAS demora MUITO para fechar quando API se recupera** ❌
-3. **Resultado: 63% das requests ficam bloqueadas (503)** ❌
+3. **Resultado: 63% das requests ficam em fallback (202)** ⚠️
 4. **Taxa de sucesso cai de 90% para 33%** ❌
 
 ---
@@ -294,20 +294,12 @@ slowCallRateThreshold: 80%     →  85%          # Mais tolerante
 1. **Abre apenas em crises graves** (60% de falhas)
 2. **Fecha rapidamente na recuperação** (testa após 3s)
 3. **Valida bem antes de fechar** (10 chamadas de teste)
-4. **Fallback inteligente** (202 em vez de 503)
+4. **Fallback inteligente** (202 em vez de 500)
 
 ---
 
-### 💡 Inovação: Fallback com Status 202
+### 💡 Fallback com Status 202
 
-#### ANTES:
-```java
-// CB aberto → retorna 503 (Service Unavailable)
-return ResponseEntity.status(503).body("Circuit Breaker aberto");
-```
-**Problema:** 503 é contado como "erro" nas métricas
-
-#### AGORA:
 ```java
 // CB aberto → retorna 202 (Accepted - Processamento Assíncrono)
 return ResponseEntity.status(202)
@@ -326,7 +318,7 @@ return ResponseEntity.status(202)
 | **Total Success** | 89.9% | **75-85%** | ✅ Muito melhor que 33% |
 | Sucesso Real (200) | 89.9% | 45-55% | ✅ +13-22pp vs 33% |
 | Fallback (202) | 0% | 25-35% | ✅ Aceitos assíncronos |
-| CB Bloqueado (503) | 0% | **5-15%** | ✅ 4x menos que 63% |
+| Fallback (202) (share) | 0% | **5-15%** | ✅ Bem menos que 63% |
 | Falhas (500) | 10.1% | 3-5% | ✅ Mantém proteção |
 | Tempo Médio | 602ms | 180-220ms | ✅ Continua rápido |
 
@@ -378,7 +370,7 @@ Taxa de Sucesso (quanto maior, melhor)
 > 3. **Configuração otimizada** (60% threshold + 3s wait) → **75-85% sucesso** (✅ ideal)
 >
 > A chave está em **fechar rapidamente** (3s vs 10s) quando a API se recupera,
-> combinado com **fallback inteligente** (202 em vez de 503) que melhora a
+> combinado com **fallback inteligente** (202 em vez de 500) que melhora a
 > percepção de disponibilidade do usuário."
 
 ---
@@ -398,7 +390,7 @@ Taxa de Sucesso (quanto maior, melhor)
 Após rodar, verifique em `catastrofe_status.csv`:
 
 ✅ **Total Success Rate (200 + 202) > 75%**
-✅ **CB Open (503) < 15%**
+✅ **Fallback (202) < 15%**
 ✅ **API Failure Rate (500) < 5%**
 ✅ **Tempo médio < 250ms**
 

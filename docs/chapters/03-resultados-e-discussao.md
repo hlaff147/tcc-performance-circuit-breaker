@@ -45,8 +45,8 @@ Os testes de carga foram executados usando `k6` e `Docker Compose`. Cada versão
 **Discussão (Análise da Tabela 3)**
 
 - Este cenário testa a velocidade de reação do sistema.
-- **Análise V1:** A V1 falhou rapidamente (o HTTP 503 é rápido), mas repassou 100% dos erros (HTTP 500) ao usuário. O `k6` reportou 100% em `http_req_failed`, falhando o `threshold`.
-- **Análise V2:** A V2 detectou as falhas (HTTP 503), abriu o circuito e acionou o fallback (HTTP 202). O `k6` reportou 0% de falhas, passando no teste. A latência foi até menor, pois servir um fallback é mais rápido que uma chamada de rede.
+- **Análise V1:** A V1 falhou rapidamente (HTTP 500), mas repassou 100% dos erros ao usuário. O `k6` reportou 100% em `http_req_failed`, falhando o `threshold`.
+- **Análise V2:** A V2 detectou as falhas (HTTP 500), abriu o circuito e acionou o fallback (HTTP 202). O `k6` reportou 0% de falhas, passando no teste. A latência foi até menor, pois servir um fallback é mais rápido que uma chamada de rede.
 
 ## Discussão Geral
 
