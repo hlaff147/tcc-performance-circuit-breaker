@@ -1,0 +1,57 @@
+\section{Methodology}
+\label{sec:methodology}
+
+This work adopts a \textbf{quantitative experimental research} approach. We built a simplified Proof of Concept (POC) simulating a microservices ecosystem with synchronous dependency. The POC is intentionally minimalistic—without database, cache, or authentication—to isolate the Circuit Breaker's effect as the sole variable of interest.
+
+\subsection{Experimental Architecture}
+
+The POC comprises two Spring Boot microservices packaged as Docker containers:
+
+\begin{itemize}
+    \item \textbf{payment-service}: Orchestrates the payment flow and synchronously consumes the acquirer service via Feign Client;
+    \item \textbf{acquirer-service}: Simulates an external payment gateway with configurable behavior (normal, latency, or failure mode).
+\end{itemize}
+
+Three versions of payment-service were developed:
+\begin{itemize}
+    \item \textbf{V1 (Baseline)}: Basic timeouts only (2s);
+    \item \textbf{V2 (Circuit Breaker)}: Resilience4j with CB and fallback returning HTTP 202;
+    \item \textbf{V3 (Retry)}: Exponential backoff retry (3 attempts, 500ms→1s→2s).
+\end{itemize}
+
+\subsection{Circuit Breaker Configuration (V2)}
+
+\begin{itemize}
+    \item \textbf{failureRateThreshold}: 50\%
+    \item \textbf{slowCallRateThreshold}: 70\%
+    \item \textbf{slidingWindowSize}: 10 requests
+    \item \textbf{waitDurationInOpenState}: 10s
+    \item \textbf{permittedNumberOfCallsInHalfOpenState}: 3
+\end{itemize}
+
+\subsection{Test Scenarios}
+
+Five realistic failure scenarios were designed using Grafana k6 (Table~\ref{tab:scenarios}):
+
+\begin{table}[H]
+\centering
+\caption{Test Scenario Characteristics}
+\label{tab:scenarios}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Scenario} & \textbf{Duration} & \textbf{VUs} & \textbf{Failure Pattern} \\
+\midrule
+Catastrophe & 13min & 50-150 & 100\% failure for 5min \\
+Degradation & 13min & 100-200 & 5\%→50\% gradual \\
+Bursts & 13min & 100-200 & 3×(100\% for 1min) \\
+Unavailability & 9min & 80-200 & 75\% offline \\
+Normal & 10min & 100 & 100\% healthy \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Metrics and Statistical Analysis}
+
+Collected metrics include: http\_reqs (throughput), http\_req\_duration\{p(95)\} (latency percentile), and http\_req\_failed (error rate).
+
+Statistical validation employed: Student's t-test for comparing V1 vs V2, ANOVA for three-group comparison (V1, V2, V3), and Cohen's d for effect size quantification.

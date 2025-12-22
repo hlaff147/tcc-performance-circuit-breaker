@@ -1,0 +1,12 @@
+\section{Related Work}
+\label{sec:related}
+
+The Circuit Breaker pattern was popularized by Nygard \cite{nygard2018} in ``Release It!'' and documented by Fowler \cite{fowler2014cb}. It operates as an electrical breaker: when abnormal conditions are detected, it ``opens'' to interrupt flow and protect the system.
+
+Montesi and Weber \cite{montesi2016} analyze the interaction between Circuit Breakers and API Gateways, proposing composition patterns. Burns \cite{burns2018} contextualizes resilience patterns in modern distributed systems design.
+
+Of particular relevance is the study by Pinheiro et al. \cite{pinheiro2024}, proposing analytical modeling of Circuit Breaker behavior using Stochastic Petri Nets (SPNs). This approach enables predicting the impact of different CB parameterizations on SLA metrics before production deployment. Our work complements this theoretical contribution by providing \textbf{empirical validation} of Circuit Breaker benefits through controlled experiments.
+
+The taxonomy of dependability by Avizienis et al. \cite{avizienis2004} provides the theoretical framework for understanding system reliability, defining the fault-error-failure model essential for analyzing degradation in distributed systems.
+
+Regarding implementation, Netflix Hystrix pioneered Circuit Breaker implementation for the JVM \cite{hystrix, netflix2016}. However, in 2018, the project entered maintenance mode, and Resilience4j emerged as its recommended successor \cite{resilience4j}, offering modular design, smaller footprint, and native support for functional programming.

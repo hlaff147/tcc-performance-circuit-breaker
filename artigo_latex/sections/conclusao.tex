@@ -1,0 +1,34 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+This work investigated the fragility of synchronous communication in microservices, specifically the risk of cascading failures. The objective was to quantitatively evaluate the impact of the Circuit Breaker pattern on performance and resilience.
+
+\subsection{Summary of Results}
+
+Experimental results were conclusive:
+\begin{itemize}
+    \item \textbf{Dramatic Availability Improvement}: V2 (Circuit Breaker) achieved superior success rates in all failure scenarios, with improvements ranging from +20pp to +89pp;
+    \item \textbf{Significant Failure Reduction}: Up to 99.5\% reduction in failure rates;
+    \item \textbf{Fallback as Success Strategy}: The HTTP 202 fallback mechanism accounted for up to 99.1\% of successful responses in worst scenarios;
+    \item \textbf{Superiority over Retry}: V3 (Retry) showed only marginal improvements over V1, demonstrating that Retry alone does not improve availability in persistent failures;
+    \item \textbf{Statistical Validation}: Cohen's d = 1.078 confirms large effect size with substantial practical relevance;
+    \item \textbf{No Overhead}: In Normal scenario (100\% healthy), all versions achieved 100\% success, confirming CB introduces no overhead in healthy conditions.
+\end{itemize}
+
+\subsection{Contributions}
+
+This paper contributes to the literature by providing:
+\begin{enumerate}
+    \item Robust empirical evidence demonstrating real Circuit Breaker impact across five realistic failure scenarios;
+    \item Comparative analysis between Circuit Breaker (V2) and isolated Retry (V3);
+    \item Rigorous statistical analysis with effect size measures;
+    \item Reproducible methodology with Docker and k6 that can be replicated for evaluating other resilience patterns.
+\end{enumerate}
+
+\subsection{Limitations}
+
+This study has limitations: (i) simplified POC without database or complex business logic; (ii) local environment without real network latency; (iii) synthetic load with uniform patterns; (iv) single CB configuration tested.
+
+\subsection{Future Work}
+
+Future research directions include: CB combined with Retry, parametric analysis of CB configurations, evaluation with multiple dependencies, comparison with asynchronous architectures (Kafka, RabbitMQ), and integration with Service Meshes (Istio, Linkerd).

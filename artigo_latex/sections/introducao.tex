@@ -1,0 +1,28 @@
+\section{Introduction}
+\label{sec:introduction}
+
+The microservices architecture has become ubiquitous in organizations building large-scale digital platforms that require continuous availability and accelerated evolution cycles \cite{newman2021}. E-commerce ecosystems and payment processing systems exemplify this movement, demanding flexibility, fault tolerance, and rapid adaptation to variable transaction volumes.
+
+While partitioning functionality into independent services facilitates parallel development and selective scalability, this logical independence relies on real-time interactions between services, typically through REST APIs and declarative clients like Spring Cloud OpenFeign. Synchronous communication simplifies implementation and observability but introduces strong temporal coupling: the consumer service remains blocked until the dependent service responds or a timeout occurs \cite{nygard2018}.
+
+\subsection{Problem Statement}
+
+The risk inherent to synchronous communication constitutes the core of this investigation. When a dependent service experiences high latency or intermittent unavailability, the consuming service waits until timeout, keeping threads blocked. With increasing request volume, the thread pool exhausts (\textbf{thread pool starvation}), causing \textbf{cascading failures} that can bring down the entire system.
+
+This problem is transversal across software engineering domains: e-commerce, logistics, healthcare, fintech, streaming, and IoT. Any distributed system relying on synchronous HTTP calls is subject to the risks analyzed here.
+
+\subsection{Proposed Solution}
+
+The Circuit Breaker (CB) pattern emerges as a response to these challenges. Operating as a state machine with three modes—\textbf{Closed}, \textbf{Open}, and \textbf{Half-Open}—the CB monitors calls to dependent services and interrupts new attempts when failure rates exceed configured thresholds, failing fast and protecting the consumer from resource exhaustion \cite{fowler2014cb}.
+
+\subsection{Contribution}
+
+Despite extensive literature on microservices and resilience patterns, there is a significant gap regarding \textbf{quantitative experimental studies} demonstrating the actual impact of the Circuit Breaker pattern. Most available documentation is limited to conceptual descriptions or trivial examples.
+
+This paper fills this gap by:
+\begin{enumerate}
+    \item \textbf{Implementing} a Proof of Concept (POC) simulating a microservices ecosystem with synchronous dependency, instrumented with Resilience4j;
+    \item \textbf{Executing} benchmark campaigns with Docker and k6 to \textbf{empirically measure} throughput, latency (p95), and error rates across controlled scenarios;
+    \item \textbf{Comparing} three architectural versions: Baseline (V1), Circuit Breaker (V2), and Retry with exponential backoff (V3);
+    \item \textbf{Providing} rigorous statistical analysis with effect size measures (Cohen's d = 1.078).
+\end{enumerate}
