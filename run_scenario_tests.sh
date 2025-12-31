@@ -15,6 +15,7 @@ set -e
 SCENARIO=${1:-all}
 RESULTS_DIR="k6/results/scenarios"
 SCRIPTS_DIR="k6/scripts"
+INCLUDE_V3=${INCLUDE_V3:-false}
 
 # Cores para output
 RED='\033[0;31m'
@@ -245,6 +246,29 @@ run_scenario() {
         "/scripts/$script_file" || echo "⚠️  Threshold falhou mas dados foram coletados"
     
     echo -e "\n${GREEN}✅ V2 concluído${NC}\n"
+
+    # V3 - Retry com Backoff Exponencial (opcional)
+    if [ "${INCLUDE_V3}" = "true" ]; then
+        echo -e "${GREEN}🔄 Rodando V3 (retry/backoff)...${NC}"
+
+        docker-compose stop servico-pagamento 2>/dev/null || true
+
+        PAYMENT_SERVICE_VERSION=v3 docker-compose build servico-pagamento
+        PAYMENT_SERVICE_VERSION=v3 docker-compose up -d --no-deps servico-pagamento
+        echo "Aguardando serviço V3 inicializar..."
+        wait_for_payment_service "V3"
+
+        docker-compose up -d --no-deps k6-tester
+        sleep 2
+
+        docker-compose exec -T k6-tester k6 run \
+            --out json="/scripts/results/scenarios/${scenario_name}_V3.json" \
+            --summary-export="/scripts/results/scenarios/${scenario_name}_V3_summary.json" \
+            -e PAYMENT_BASE_URL=http://servico-pagamento:8080 \
+            "/scripts/$script_file" || echo "⚠️  Threshold falhou mas dados foram coletados"
+
+        echo -e "\n${GREEN}✅ V3 concluído${NC}\n"
+    fi
     
     echo -e "${GREEN}✨ Cenário $scenario_name finalizado!${NC}\n"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

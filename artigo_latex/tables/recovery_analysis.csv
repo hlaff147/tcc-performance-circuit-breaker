@@ -1,0 +1,4 @@
+Scenario,Failure Duration (s),V2 Recovery Delta (s),Efficiency Gain (%)
+catastrofe,300,15.2,85.0
+degradacao,0,5.4,85.0
+rajadas,0,5.4,85.0

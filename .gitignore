@@ -23,6 +23,9 @@ buildNumber.properties
 *.log
 logs/
 
+# Logs gerados por execuções paralelas (repo root)
+.parallel_logs/
+
 # Docker
 .env
 *.env
@@ -49,6 +52,12 @@ k6/results/scenarios/*.json
 # Manter apenas os arquivos de resumo (pequenos, ~8KB cada)
 !k6/results/*_summary.json
 !k6/results/scenarios/*_summary.json
+
+# Cache de leitura (Parquet) gerado pelo fast_loader.py
+k6/results/**/.cache/
+
+# Segurança extra: nunca versionar Parquet (cache/artefato local)
+*.parquet
 
 # ============================================
 # Analysis results - Gerados automaticamente
@@ -132,3 +141,43 @@ results_archive/**/*.json
 *.json.gz
 *.tar.gz
 *.zip
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v1_run1.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v1_run2.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v1_run3.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v1_run4.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v1_run5.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v2_run1.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v2_run2.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v2_run3.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v2_run4.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v2_run5.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v3_run1.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v3_run2.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v3_run3.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v3_run4.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v3_run5.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v4_run1.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v4_run2.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v4_run3.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v4_run4.json
+k6/results/comparative/experiment_20251216_101442/falha-catastrofica_v4_run5.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v1_run1.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v1_run2.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v1_run3.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v1_run4.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v1_run5.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v2_run1.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v2_run2.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v2_run3.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v2_run4.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v2_run5.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v3_run1.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v3_run2.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v3_run3.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v3_run4.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v3_run5.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v4_run1.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v4_run2.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v4_run3.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v4_run4.json
+k6/results/comparative/experiment_20251216_101442/indisponibilidade-extrema_v4_run5.json

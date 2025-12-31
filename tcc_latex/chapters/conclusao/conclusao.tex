@@ -1,0 +1,98 @@
+\chapter{Conclusão}
+\label{cap:conclusao}
+
+\section{Revisão dos Objetivos e do Problema}
+Este trabalho se propôs a investigar a fragilidade da comunicação síncrona em microsserviços, especificamente o risco de falhas em cascata em um sistema de pagamentos. O objetivo foi avaliar quantitativamente o impacto do padrão Circuit Breaker no desempenho e resiliência, usando um experimento prático e reprodutível com \texttt{Docker} e \texttt{k6}.
+
+\section{Síntese dos Resultados}
+Os resultados experimentais foram conclusivos e demonstraram de forma inequívoca o valor do padrão Circuit Breaker, bem como as limitações do padrão Retry quando usado isoladamente. Os cinco cenários testados (Normal, Catástrofe, Degradação, Rajadas e Indisponibilidade) revelaram:
+
+\begin{itemize}
+    \item \textbf{Melhoria Dramática na Disponibilidade:} A V2 (Circuit Breaker) alcançou taxas de sucesso superiores em todos os cenários de falha:
+    \begin{itemize}
+        \item \textbf{Catástrofe:} V1=35,7\% $\rightarrow$ V2=95,1\% (\textbf{+59,3pp})
+        \item \textbf{Degradação:} V1=75,4\% $\rightarrow$ V2=95,4\% (\textbf{+20,0pp})
+        \item \textbf{Indisponibilidade:} V1=10,5\% $\rightarrow$ V2=99,6\% (\textbf{+89,1pp})
+        \item \textbf{Rajadas:} V1=63,0\% $\rightarrow$ V2=96,7\% (\textbf{+33,6pp})
+    \end{itemize}
+    
+    \item \textbf{Redução Expressiva de Falhas:} O Circuit Breaker reduziu a taxa de falhas em até \textbf{99,5\%} no cenário de indisponibilidade e mais de \textbf{81\%} em todos os cenários adversos.
+    
+    \item \textbf{Fallback como Estratégia de Sucesso:} O mecanismo de fallback (HTTP 202) foi responsável por até 99,1\% das respostas bem-sucedidas nos piores cenários, permitindo degradação graciosa.
+    
+    \item \textbf{Superioridade sobre Retry:} A V3 (Retry com backoff exponencial) apresentou taxas de sucesso apenas marginalmente melhores que a V1, demonstrando que \textbf{Retry sozinho não melhora disponibilidade} em cenários de falha persistente. Por exemplo, no cenário Indisponibilidade: V1=10,5\%, V3=15,7\%, V2=99,6\%.
+    
+    \item \textbf{Análise Estatística:} O teste t confirmou diferença significativa (p < 0,0001) com Cohen's d = 1,078 (\textbf{efeito grande}). A ANOVA entre as três versões confirmou F=546,79 com $\eta^2$=0,267.
+    
+    \item \textbf{Overhead Negligível:} No cenário Normal (100\% saudável), todas as versões apresentaram 100\% de sucesso, confirmando que o Circuit Breaker não introduz overhead em condições normais.
+\end{itemize}
+
+A arquitetura Baseline (V1) e a versão com Retry (V3) provaram ser \textbf{inadequadas para produção} em sistemas de missão crítica, enquanto a V2 (Circuit Breaker) demonstrou robustez excepcional, protegendo o \texttt{servico-pagamento} e garantindo disponibilidade percebida pelo usuário através da degradação graciosa (HTTP 202).
+
+\section{Contribuições do Trabalho}
+Este TCC contribui para a literatura ao fornecer:
+\begin{enumerate}
+    \item \textbf{Evidência Empírica Robusta:} Dados quantitativos que demonstram o impacto real do Circuit Breaker em cinco cenários realistas de falha, cobrindo situações de catástrofe, degradação gradual, rajadas intermitentes e indisponibilidade extrema.
+    \item \textbf{Comparação entre Padrões:} Análise comparativa entre Circuit Breaker (V2) e Retry isolado (V3), demonstrando que Retry \textbf{não substitui} o CB em falhas persistentes.
+    \item \textbf{Análise Estatística Rigorosa:} Aplicação de teste t, ANOVA e medidas de effect size (Cohen's d = 1,078) que confirmam relevância prática substancial.
+    \item \textbf{Metodologia Reprodutível:} Um framework de testes com Docker e k6 que pode ser replicado para avaliar outros padrões de resiliência.
+    \item \textbf{Quantificação de Benefícios:} Demonstração de melhorias de até +89pp na taxa de sucesso e redução de até 99,5\% nas falhas.
+\end{enumerate}
+
+\section{Limitações do Estudo}
+Apesar dos resultados expressivos, este trabalho apresenta limitações que devem ser consideradas na interpretação dos achados:
+
+\begin{enumerate}
+    \item \textbf{POC Simplificada:} O sistema experimental é uma Prova de Conceito intencionalmente rudimentar, sem banco de dados, cache, autenticação ou lógica de negócio complexa. Sistemas de produção reais possuem mais variáveis que podem interagir com o comportamento do Circuit Breaker.
+    
+    \item \textbf{Ambiente Local:} Os experimentos foram executados em uma única máquina, sem latência de rede real entre serviços. Em ambientes distribuídos (multi-datacenter, cloud), a latência adicional pode influenciar os resultados.
+    
+    \item \textbf{Carga Sintética:} O k6 gera tráfego sintético com padrões uniformes. Tráfego real apresenta características mais complexas: rajadas imprevisíveis, sazonalidade e correlação entre requisições.
+    
+    \item \textbf{Serviço Adquirente Mockado:} O \texttt{servico-adquirente} foi implementado com falhas controladas e determinísticas. Em produção, falhas são frequentemente parciais e imprevisíveis.
+    
+    \item \textbf{Configuração Fixa do CB:} Apenas uma configuração do Circuit Breaker foi testada. Diferentes parametrizações podem resultar em comportamentos distintos.
+\end{enumerate}
+
+\section{Ameaças à Validade}
+Identificamos as seguintes ameaças à validade dos resultados:
+
+\textbf{Validade Interna:}
+\begin{itemize}
+    \item \textbf{Variabilidade do ambiente:} Processos em segundo plano no sistema operacional, garbage collection da JVM e contenção de recursos do Docker podem introduzir variância nos resultados.
+    \item \textbf{Warm-up da JVM:} A compilação JIT (Just-In-Time) pode afetar os primeiros minutos de cada teste. Mitigamos isso com fases de aquecimento nos scripts k6.
+\end{itemize}
+
+\textbf{Validade Externa:}
+\begin{itemize}
+    \item \textbf{Generalização:} Os resultados são específicos para o domínio de pagamentos e a stack tecnológica utilizada (Java/Spring). Outros domínios e tecnologias podem apresentar comportamentos diferentes.
+    \item \textbf{Escala:} O experimento utilizou até 200 VUs (usuários virtuais). Sistemas de produção podem enfrentar milhares de requisições simultâneas.
+\end{itemize}
+
+\textbf{Validade de Construção:}
+\begin{itemize}
+    \item \textbf{Definição de sucesso:} Consideramos HTTP 200 e HTTP 202 (fallback) como sucesso. Em contextos onde o fallback não é aceitável pelo negócio, a interpretação dos resultados seria diferente.
+\end{itemize}
+
+\section{Trabalhos Futuros}
+Como trabalho futuro, sugere-se:
+\begin{enumerate}
+    \item \textbf{Combinação CB + Retry:} Avaliar a combinação de Circuit Breaker com Retry interno, permitindo retentativas rápidas enquanto o circuito está fechado.
+    
+    \item \textbf{Análise Paramétrica:} Investigar sistematicamente o impacto de diferentes configurações do Circuit Breaker (ex: \texttt{slidingWindowSize}, \texttt{failureRateThreshold}).
+    
+    \item \textbf{Cenários de Múltiplas Dependências:} Avaliar o comportamento do CB em arquiteturas com múltiplos serviços dependentes.
+    
+    \item \textbf{Comunicação Assíncrona:} Comparar os resultados com arquiteturas baseadas em mensageria (Apache Kafka, RabbitMQ).
+    
+    \item \textbf{Ambiente Cloud Distribuído:} Replicar os experimentos em ambiente cloud com latência de rede real.
+    
+    \item \textbf{Chaos Engineering:} Integrar ferramentas de Chaos Engineering (ex: Chaos Monkey, Litmus) para injeção de falhas aleatórias.
+    
+    \item \textbf{Circuit Breakers Adaptativos com Machine Learning:} Investigar o uso de algoritmos de aprendizado de máquina para ajuste dinâmico dos parâmetros do CB, permitindo predição de falhas e otimização automática do compromisso entre latência e taxa de sucesso.
+    
+    \item \textbf{Integração com Service Meshes:} Avaliar a implementação do Circuit Breaker em nível de infraestrutura através de Service Meshes como Istio e Linkerd, tornando a resiliência uma característica intrínseca da plataforma Kubernetes-native.
+    
+    \item \textbf{Modelagem Formal com Redes de Petri Estocásticas:} Explorar técnicas de modelagem formal (SPN, CTMC) para prever o comportamento do sistema sob diferentes configurações antes da implantação em produção, conforme proposto por \citeonline{pinheiro2024}.
+\end{enumerate}
+

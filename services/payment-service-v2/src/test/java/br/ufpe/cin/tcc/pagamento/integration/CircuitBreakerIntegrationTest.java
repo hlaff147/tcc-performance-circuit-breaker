@@ -12,6 +12,7 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * - Recuperação automática quando serviço volta ao normal
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("agressivo")
 @DisplayName("Circuit Breaker - Testes de Integração")
 class CircuitBreakerIntegrationTest {
 
@@ -60,7 +62,7 @@ class CircuitBreakerIntegrationTest {
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("feign.client.config.adquirente-client.url", 
+        registry.add("adquirente-client.url",
             () -> "http://localhost:" + wireMockServer.port());
     }
 
@@ -205,8 +207,9 @@ class CircuitBreakerIntegrationTest {
                 } catch (Exception ignored) {}
             }
 
-            // Aguarda waitDurationInOpenState (3s na config atual)
-            Thread.sleep(4000);
+            CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("adquirente-cb");
+            // No perfil agressivo, waitDurationInOpenState=5s
+            Thread.sleep(6000);
 
             // Configura resposta de sucesso para permitir recuperação
             stubFor(post(urlPathEqualTo("/autorizar"))
@@ -215,10 +218,18 @@ class CircuitBreakerIntegrationTest {
                     .withBody("Pagamento Aprovado")));
 
             // Act - tenta uma chamada
-            PaymentResponse response = paymentService.processPayment("normal", sampleRequest);
+            PaymentResponse response = null;
+            for (int attempt = 0; attempt < 15; attempt++) {
+                response = paymentService.processPayment("normal", sampleRequest);
+                if (response.status() == HttpStatus.OK) {
+                    break;
+                }
+                Thread.sleep(250);
+            }
 
             // Assert - deve ter processado ou estar em transição
-            CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("adquirente-cb");
+            assertThat(response).isNotNull();
+            assertThat(response.status()).isEqualTo(HttpStatus.OK);
             assertThat(cb.getState()).isIn(
                 CircuitBreaker.State.HALF_OPEN, 
                 CircuitBreaker.State.CLOSED

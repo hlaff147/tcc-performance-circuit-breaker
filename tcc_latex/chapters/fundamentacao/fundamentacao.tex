@@ -1,0 +1,106 @@
+\chapter{Fundamentação Teórica}
+\label{cap:fundamentacao}
+
+\section{Arquitetura de Microsserviços}
+A arquitetura de microsserviços representa uma abordagem de desenvolvimento de software que estrutura uma aplicação como um conjunto de serviços pequenos, autônomos e fracamente acoplados \cite{newman2021}. Cada serviço é responsável por uma capacidade de negócio específica, pode ser desenvolvido, implantado e escalado de forma independente, e se comunica com outros serviços através de interfaces bem definidas, geralmente APIs REST ou mensageria assíncrona \cite{fowler2014}.
+
+Os principais benefícios desta arquitetura incluem: (i) \textbf{escalabilidade seletiva}, permitindo escalar apenas os serviços sob maior demanda; (ii) \textbf{autonomia de equipes}, possibilitando que times diferentes desenvolvam e implantem serviços independentemente; (iii) \textbf{resiliência a falhas}, onde a falha de um serviço não necessariamente compromete todo o sistema; e (iv) \textbf{flexibilidade tecnológica}, permitindo que cada serviço utilize a tecnologia mais adequada ao seu propósito \cite{richardson2018}.
+
+Contudo, essa arquitetura introduz desafios significativos de natureza distribuída. A comunicação entre serviços através da rede é inerentemente não confiável, sujeita a latências variáveis, timeouts e falhas parciais. Em sistemas monolíticos, chamadas de função são executadas em memória com latência desprezível; em microsserviços, cada chamada atravessa a rede e pode falhar de múltiplas formas \cite{nygard2018}.
+
+\subsection{Dependabilidade em Sistemas Distribuídos}
+Para compreender a resiliência em microsserviços, é fundamental estabelecer uma base teórica sobre a dependabilidade. Conforme a taxonomia seminal de \citeonline{avizienis2004}, a dependabilidade é definida como a capacidade de evitar falhas de serviço que sejam mais frequentes ou severas do que o aceitável para os usuários. Esse conceito é sustentado por seis atributos fundamentais: \textbf{disponibilidade} (prontidão para serviço correto), \textbf{confiabilidade} (continuidade do serviço correto), \textbf{segurança} (safety), \textbf{confidencialidade}, \textbf{integridade} e \textbf{manutenibilidade}.
+
+O modelo de \textbf{falha-erro-mau funcionamento} (fault-error-failure) fornece a estrutura para analisar a degradação do sistema:
+\begin{itemize}
+    \item \textbf{Fault (falha):} A causa raiz, que pode ser física, de interação ou de desenvolvimento.
+    \item \textbf{Error (erro):} O estado interno anormal resultante dessa falha.
+    \item \textbf{Failure (mau funcionamento):} Ocorre quando o serviço deixa de cumprir sua especificação perante o usuário externo.
+\end{itemize}
+
+Em microsserviços, as \textbf{falhas de timing} — onde uma resposta correta é entregue fora da janela temporal aceitável — são tão críticas quanto as \textbf{falhas de conteúdo}, especialmente em sistemas de pagamento que operam sob rigorosos Acordos de Nível de Serviço (SLAs) \cite{avizienis2004}.
+
+\section{Comunicação Síncrona e seus Riscos}
+A comunicação síncrona, tipicamente implementada via HTTP/REST, é caracterizada pelo bloqueio do serviço consumidor enquanto aguarda a resposta do serviço provedor. Embora seja simples de implementar e depurar, este modelo introduz um \textbf{acoplamento temporal} entre os serviços: se o provedor estiver lento ou indisponível, o consumidor também será afetado \cite{burns2018}.
+
+Os principais riscos associados à comunicação síncrona incluem:
+
+\begin{itemize}
+    \item \textbf{Thread Pool Starvation:} Quando múltiplas requisições aguardam respostas lentas, as threads do servidor ficam bloqueadas, esgotando o pool disponível e impedindo o processamento de novas requisições.
+    \item \textbf{Falhas em Cascata:} Uma dependência lenta ou indisponível pode propagar sua condição para todos os serviços que dela dependem, amplificando o impacto de uma falha localizada para todo o ecossistema.
+    \item \textbf{Efeito Dominó:} Em cadeias de dependências (A → B → C), a falha de C pode derrubar B e, consequentemente, A, mesmo que estes estejam funcionando corretamente.
+\end{itemize}
+
+A Tabela \ref{tab:sinc-vs-assinc} compara as características da comunicação síncrona com a assíncrona (Arquitetura Orientada a Eventos), evidenciando os trade-offs de cada abordagem.
+
+\begin{table}[H]
+\centering
+\caption{Comparação entre comunicação síncrona e assíncrona}
+\label{tab:sinc-vs-assinc}
+\begin{tabular}{lp{4.5cm}p{4.5cm}}
+\toprule
+\textbf{Atributo} & \textbf{Comunicação Síncrona} & \textbf{Comunicação Assíncrona (EDA)} \\
+\midrule
+Acoplamento & Forte (temporal e espacial) & Fraco (baseado em eventos) \\
+Latência & Ditada pelo serviço mais lento & Processamento em paralelo \\
+Consistência & Imediata (tipicamente) & Eventual \\
+Complexidade & Menor (fluxo linear) & Maior (gerenciamento de eventos) \\
+Tolerância a Falhas & Exige padrões como Circuit Breaker & Naturalmente resiliente \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Embora a EDA ofereça vantagens claras em termos de elasticidade e robustez, a comunicação síncrona permanece necessária para operações que exigem confirmação imediata de estado, como a validação de crédito em uma jornada de checkout.
+
+\section{Padrões de Tolerância a Falhas}
+Para mitigar os riscos da comunicação distribuída, diversos padrões de tolerância a falhas foram propostos pela comunidade de engenharia de software \cite{nygard2018, richardson2018}. A Tabela \ref{tab:padroes-resiliencia} resume os principais padrões, seus mecanismos e riscos associados.
+
+\begin{table}[H]
+\centering
+\caption{Comparação de padrões de tolerância a falhas}
+\label{tab:padroes-resiliencia}
+\begin{tabular}{lp{3.5cm}p{3.5cm}p{3.5cm}}
+\toprule
+\textbf{Padrão} & \textbf{Mecanismo} & \textbf{Benefício Principal} & \textbf{Risco Associado} \\
+\midrule
+Timeout & Limite máximo de espera & Liberação de recursos bloqueados & Descarte de requisições válidas \\
+Retry & Repetição de chamadas & Recupera falhas transitórias & Amplificação de carga (Retry Storm) \\
+Bulkhead & Compartimentalização de recursos & Isolamento de falhas & Overhead de gerenciamento \\
+Rate Limiter & Controle de taxa & Proteção contra sobrecarga & Rejeição de requisições legítimas \\
+Circuit Breaker & Corte de fluxo baseado em erro & Previne falhas em cascata & Configuração de limiares imprecisa \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Entre esses padrões, o \textbf{Circuit Breaker} destaca-se por sua capacidade de interromper temporariamente chamadas a uma dependência que apresenta falhas recorrentes, permitindo recuperação e evitando desperdício de recursos. Estudos indicam que a implementação correta deste padrão pode reduzir as taxas de erro em até 58\% durante períodos de instabilidade \cite{ieeecloud2024}.
+
+\section{O Padrão Circuit Breaker em Detalhe}
+O padrão Circuit Breaker, popularizado por Michael Nygard em seu livro ``Release It!'' \cite{nygard2018} e documentado por Martin Fowler \cite{fowler2014cb}, opera como um disjuntor elétrico: quando detecta condições anormais, ``abre'' para interromper o fluxo e proteger o sistema.
+
+A implementação típica do Circuit Breaker utiliza uma máquina de estados com três estados:
+
+\begin{enumerate}
+    \item \textbf{Fechado (Closed):} Estado normal de operação. Todas as requisições são encaminhadas à dependência. O CB monitora continuamente métricas como taxa de falha e tempo de resposta.
+    \item \textbf{Aberto (Open):} Ativado quando métricas excedem limiares configurados (ex: >50\% de falhas). Requisições são imediatamente rejeitadas ou redirecionadas a um fallback, sem tentar contactar a dependência. Após um período de espera (\textit{wait duration}), transiciona para Semiaberto.
+    \item \textbf{Semiaberto (Half-Open):} Estado de teste. Um número limitado de requisições é permitido para verificar se a dependência se recuperou. Se bem-sucedidas, retorna ao estado Fechado; caso contrário, volta ao estado Aberto.
+\end{enumerate}
+
+\section{Implementações de Circuit Breaker: Hystrix vs Resilience4j}
+O Netflix Hystrix foi pioneiro na implementação do padrão Circuit Breaker para a JVM, sendo amplamente adotado na indústria \cite{hystrix, netflix2016}. Contudo, em 2018, o projeto entrou em modo de manutenção, e o Resilience4j emergiu como seu sucessor recomendado \cite{resilience4j}.
+
+O Resilience4j apresenta vantagens significativas sobre o Hystrix:
+
+\begin{itemize}
+    \item \textbf{Design modular:} Cada padrão (Circuit Breaker, Retry, Bulkhead, Rate Limiter, Time Limiter) é um módulo independente que pode ser composto conforme necessário.
+    \item \textbf{Menor footprint:} Não requer thread pools separados como o Hystrix, reduzindo consumo de recursos.
+    \item \textbf{Suporte a programação funcional:} Integração nativa com lambdas Java 8+, CompletableFuture e frameworks reativos.
+    \item \textbf{Métricas nativas:} Exportação de métricas para Prometheus/Micrometer sem configuração adicional.
+    \item \textbf{Janela deslizante configurável:} Suporta janelas baseadas em contagem ou tempo para cálculo de métricas.
+\end{itemize}
+
+\section{Trabalhos Relacionados}
+A literatura recente apresenta diversos estudos sobre resiliência em microsserviços. \citeonline{montesi2016} analisam a interação entre Circuit Breakers e API Gateways, propondo padrões de composição. \citeonline{burns2018} contextualiza padrões de resiliência no design de sistemas distribuídos modernos.
+
+De particular relevância para este trabalho é o estudo de \citeonline{pinheiro2024}, que propõe uma modelagem analítica do comportamento de Circuit Breakers utilizando Redes de Petri Estocásticas (SPNs). Esta abordagem permite prever o impacto de diferentes parametrizações do CB em métricas de SLA antes da implantação em produção. O presente TCC complementa essa contribuição teórica ao fornecer \textbf{validação empírica} dos benefícios do Circuit Breaker através de experimentos controlados em um ambiente realista.
+
+A documentação oficial da Microsoft Azure \cite{microsoftpatterns} apresenta o Circuit Breaker como um dos padrões essenciais para aplicações cloud-native, reforçando sua relevância em arquiteturas modernas de larga escala.

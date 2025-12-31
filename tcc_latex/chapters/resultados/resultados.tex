@@ -1,0 +1,593 @@
+\chapter{Resultados e Discussão}
+\label{cap:resultados}
+
+\section{Introdução ao Capítulo}
+Os testes de carga foram executados usando \texttt{k6} e \texttt{Docker Compose}. Cada versão do \texttt{servico-pagamento} (V1-Baseline, V2-CircuitBreaker, V3-Retry) foi submetida aos cinco cenários de estresse.
+
+Para clarificar a análise dos dados, definimos as seguintes categorias de resposta:
+\begin{itemize}
+    \item \textbf{Sucesso Real (HTTP 200/201):} Requisição processada com sucesso pela dependência externa.
+    \item \textbf{Sucesso por Degradação (HTTP 202):} Requisição interceptada pelo Circuit Breaker e tratada via fallback (apenas V2).
+    \item \textbf{Disponibilidade:} Soma de Sucesso Real e Sucesso por Degradação. Representa a capacidade do sistema de responder aos usuários sem erro.
+\end{itemize}
+
+Os resultados foram avaliados contra os \texttt{thresholds} definidos.
+
+\section{Visão Geral Consolidada dos Resultados}
+
+Este trabalho avaliou três versões do serviço de pagamento: V1 (Baseline sem resiliência), V2 (Circuit Breaker com Resilience4j) e V3 (Retry com Backoff Exponencial). Os resultados demonstram diferenças significativas entre as abordagens.
+
+\begin{table}[H]
+\centering
+\caption{Resumo consolidado -- Comparação V1 vs V2 por cenário}
+\label{tab:resumo-consolidado}
+\begin{tabular}{lcccc}
+\toprule
+Cenário & V1 Sucesso & V2 Sucesso & V2 Fallback & Redução Falhas \\
+\midrule
+Catástrofe & 35,7\% & \textbf{95,1\%} & 62,1\% & -92,3\% \\
+Degradação & 75,4\% & \textbf{95,4\%} & 64,7\% & -81,4\% \\
+Indisponibilidade & 10,5\% & \textbf{99,6\%} & 99,1\% & -99,5\% \\
+Normal & 100,0\% & 100,0\% & 0,0\% & 0,0\% \\
+Rajadas & 63,0\% & \textbf{96,7\%} & 34,6\% & -91,0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Observações Importantes:}
+\begin{itemize}
+    \item A V2 (Circuit Breaker) demonstrou ganhos expressivos em todos os cenários de falha, com melhorias de \textbf{+20pp a +89pp} na taxa de sucesso.
+    \item No cenário de Indisponibilidade Extrema, a V2 transformou um sistema com apenas 10,5\% de sucesso em um com 99,6\% --- uma melhoria de quase \textbf{10x}.
+    \item O mecanismo de fallback (HTTP 202) foi responsável por até 99,1\% das respostas bem-sucedidas nos piores cenários.
+    \item No cenário Normal, não há diferença entre as versões, demonstrando que o CB não introduz overhead em condições saudáveis.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/01_success_rates_comparison.png}
+\caption{Comparação de taxas de sucesso -- V1 vs V2}
+\label{fig:success_rates}
+\end{figure}
+
+\section{Análise do Cenário 1: Falha Catastrófica}
+
+Neste cenário, a API externa ficou 100\% indisponível durante 5 minutos consecutivos, simulando uma queda total do servidor.
+
+\textbf{Comportamento Observado:}
+\begin{itemize}
+    \item \textbf{V1 (Baseline):} Taxa de sucesso de apenas \textbf{35,7\%}, com 64,3\% das requisições resultando em erro 500. O tempo médio de resposta foi de 241ms.
+    \item \textbf{V2 (Circuit Breaker):} Taxa de sucesso total de \textbf{95,1\%}, sendo 33,0\% de respostas diretas (200) e 62,1\% via fallback (202). Taxa de falha reduzida para apenas 4,9\%.
+    \item \textbf{V3 (Retry):} Taxa de sucesso de 52,8\%, superior à V1 mas muito inferior à V2. O retry ajuda parcialmente, mas não resolve falhas persistentes.
+\end{itemize}
+
+\textbf{Métricas de Performance:}
+\begin{itemize}
+    \item \textbf{Redução de Falhas:} 92,3\%
+    \item \textbf{Melhoria no Tempo Médio:} 11,3\%
+    \item \textbf{Melhoria no P95:} 2,5\%
+    \item \textbf{Downtime V1:} 8,37 min | \textbf{Downtime V2:} 0,64 min
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/07_catastrofe_timeline.png}
+\caption{Timeline do cenário de falha catastrófica}
+\label{fig:catastrofe_timeline}
+\end{figure}
+
+\textbf{Impacto Positivo do Circuit Breaker:}
+\begin{enumerate}
+    \item \textbf{Proteção contra Exaustão de Recursos:} Enquanto a V1 mantinha threads bloqueadas aguardando timeout, a V2 liberava threads imediatamente após a abertura do circuito.
+    \item \textbf{Tempo de Resposta Previsível:} A V2 manteve tempos consistentes mesmo durante a catástrofe.
+    \item \textbf{Degradação Graciosa:} Usuários receberam HTTP 202 informando que o pagamento foi agendado, em vez de erro HTTP 500.
+\end{enumerate}
+
+\section{Análise do Cenário 2: Degradação Gradual}
+
+Este cenário simula uma situação comum em produção: um serviço que começa saudável mas degrada progressivamente.
+
+\textbf{Comportamento Observado:}
+\begin{itemize}
+    \item \textbf{V1 (Baseline):} Taxa de sucesso de 75,4\%, com 24,6\% de falhas.
+    \item \textbf{V2 (Circuit Breaker):} Taxa de sucesso total de \textbf{95,4\%}, sendo 30,7\% de respostas diretas e 64,7\% via fallback. Taxa de falha reduzida para 4,6\%.
+    \item \textbf{V3 (Retry):} Taxa de sucesso de 76,4\%, praticamente igual à V1.
+\end{itemize}
+
+\textbf{Métricas de Performance:}
+\begin{itemize}
+    \item \textbf{Redução de Falhas:} 81,4\%
+    \item \textbf{Melhoria no Tempo Médio:} 69,2\%
+    \item \textbf{Melhoria no P95:} 14,2\%
+    \item \textbf{Downtime V1:} 3,21 min | \textbf{Downtime V2:} 0,60 min
+\end{itemize}
+
+\textbf{Insight:} Neste cenário, o Circuit Breaker demonstrou sua eficácia em detectar a degradação progressiva e acionar o fallback preventivamente, resultando em uma melhoria significativa de \textbf{+20pp} na taxa de sucesso.
+
+\section{Análise do Cenário 3: Rajadas Intermitentes}
+
+O cenário de rajadas é particularmente desafiador, pois exige que o sistema reaja rapidamente a mudanças de estado.
+
+\textbf{Comportamento Observado:}
+\begin{itemize}
+    \item \textbf{V1 (Baseline):} Taxa de sucesso de 63,0\%, com 37,0\% de falhas durante as rajadas.
+    \item \textbf{V2 (Circuit Breaker):} Taxa de sucesso total de \textbf{96,7\%}, sendo 62,0\% de respostas diretas e 34,6\% via fallback. Taxa de falha reduzida para 3,3\%.
+    \item \textbf{V3 (Retry):} Taxa de sucesso de 77,7\%, melhor que V1 mas ainda bem inferior à V2.
+\end{itemize}
+
+\textbf{Métricas de Performance:}
+\begin{itemize}
+    \item \textbf{Redução de Falhas:} 91,0\%
+    \item \textbf{Melhoria no Tempo Médio:} 3,3\%
+    \item \textbf{Melhoria no P95:} 1,6\%
+    \item \textbf{Downtime V1:} 4,82 min | \textbf{Downtime V2:} 0,43 min
+\end{itemize}
+
+\textbf{Elasticidade do Circuit Breaker:} A capacidade do CB de transicionar entre estados (Fechado $\rightarrow$ Aberto $\rightarrow$ Semiaberto $\rightarrow$ Fechado) foi validada neste cenário. O ganho de \textbf{+33,6pp} na taxa de sucesso demonstra a proteção oferecida mesmo em cenários de instabilidade intermitente.
+
+\section{Análise do Cenário 4: Indisponibilidade Extrema}
+
+Este é o cenário mais extremo e onde o Circuit Breaker demonstrou seu valor máximo.
+
+\begin{table}[H]
+\centering
+\caption{Resultados detalhados -- Indisponibilidade extrema}
+\label{tab:indisponibilidade-detalhes}
+\begin{tabular}{lcc}
+\toprule
+Métrica & V1 (Baseline) & V2 (Circuit Breaker) \\
+\midrule
+Taxa de Sucesso Total & 10,5\% & \textbf{99,6\%} \\
+Requisições via Fallback & N/A & 99,1\% \\
+Taxa de Falha Real & 89,5\% & 0,4\% \\
+Redução de Falhas & \textemdash & \textbf{99,5\%} \\
+\midrule
+Downtime (minutos) & 8,09 min & 0,04 min \\
+Disponibilidade Efetiva & 10,5\% & 99,6\% \\
+Melhoria P95 & \textemdash & \textbf{84,5\%} \\
+Melhoria Tempo Médio & \textemdash & \textbf{94,5\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Comportamento Observado:}
+\begin{itemize}
+    \item \textbf{V1 (Baseline):} Com alta taxa de indisponibilidade, o sistema se tornou praticamente inutilizável. Apenas 10,5\% das requisições foram bem-sucedidas, caracterizando \textbf{falha catastrófica do serviço}. O downtime efetivo foi de \textbf{8,09 minutos}.
+    \item \textbf{V2 (Circuit Breaker):} O CB manteve o circuito aberto durante os períodos de indisponibilidade, servindo fallbacks e preservando a disponibilidade percebida pelo usuário em \textbf{99,6\%}. O downtime foi reduzido para apenas \textbf{0,04 minutos} (2,2 segundos).
+    \item \textbf{V3 (Retry):} Taxa de sucesso de apenas 15,7\%, demonstrando que retries são ineficazes contra indisponibilidade persistente.
+\end{itemize}
+
+\textbf{Impacto Transformador:} Este cenário demonstra que o Circuit Breaker pode transformar um sistema \textbf{completamente inutilizável} (10,5\% de sucesso) em um sistema \textbf{altamente disponível} (99,6\% de sucesso), representando uma melhoria de quase \textbf{10x na disponibilidade percebida}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/11_downtime_availability.png}
+\caption{Comparação de disponibilidade e downtime por cenário}
+\label{fig:downtime_availability}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/02_failure_reduction.png}
+\caption{Redução de falhas -- Impacto do Circuit Breaker}
+\label{fig:failure_reduction}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/09_avg_response_times.png}
+\caption{Tempos de resposta médios -- V1 vs V2 por cenário}
+\label{fig:avg_response_times}
+\end{figure}
+
+\section{Análise Comparativa Detalhada: Rajadas e Catástrofe}
+
+Os cenários de \textbf{Rajadas Intermitentes} e \textbf{Falha Catastrófica} merecem uma análise mais aprofundada por demonstrarem de forma contundente os benefícios do padrão Circuit Breaker. Nesses dois cenários, observamos as maiores transformações na disponibilidade do sistema.
+
+\subsection{Por que estes cenários são críticos?}
+
+\textbf{Rajadas Intermitentes} simulam uma situação comum em produção: picos de tráfego ou falhas que ocorrem em ondas, exigindo que o sistema reaja rapidamente às mudanças de estado. Este cenário testa a \textbf{elasticidade} do Circuit Breaker --- sua capacidade de transicionar entre estados (Fechado $\rightarrow$ Aberto $\rightarrow$ Semiaberto $\rightarrow$ Fechado) de forma dinâmica.
+
+\textbf{Falha Catastrófica} representa o pior caso possível: a dependência externa fica 100\% indisponível por um período prolongado. Este cenário testa a \textbf{proteção máxima} do Circuit Breaker e sua capacidade de manter o sistema funcional mesmo quando a dependência falha completamente.
+
+\subsection{Comparação de Taxa de Sucesso}
+
+A Figura \ref{fig:v1_v2_success_comparison} apresenta a comparação direta de taxa de sucesso entre V1 (Baseline) e V2 (Circuit Breaker) para os dois cenários.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/01_v1_v2_success_rate_comparison.png}
+\caption{Comparação de taxa de sucesso V1 vs V2 -- Cenários Rajadas e Catástrofe}
+\label{fig:v1_v2_success_comparison}
+\end{figure}
+
+\textbf{Resultados Destacados:}
+\begin{itemize}
+    \item \textbf{Rajadas Intermitentes:} V1 alcançou apenas 63,0\% de sucesso, enquanto V2 atingiu \textbf{96,7\%}, um ganho de \textbf{+33,6 pontos percentuais}.
+    \item \textbf{Falha Catastrófica:} V1 registrou 35,7\% de sucesso (sistema praticamente inutilizável), enquanto V2 manteve \textbf{95,1\%}, um ganho extraordinário de \textbf{+59,3 pontos percentuais}.
+\end{itemize}
+
+\subsection{Composição das Respostas HTTP}
+
+A análise da composição das respostas HTTP revela o mecanismo pelo qual o Circuit Breaker transforma o comportamento do sistema. A Figura \ref{fig:response_composition} mostra como as respostas são distribuídas entre códigos HTTP 200 (sucesso direto), 202 (fallback) e 500 (erro).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/02_response_composition.png}
+\caption{Composição das respostas HTTP -- O Circuit Breaker transforma erros 500 em fallbacks 202}
+\label{fig:response_composition}
+\end{figure}
+
+\textbf{Observações Importantes:}
+\begin{enumerate}
+    \item \textbf{Transformação de Erros em Fallbacks:} Em V1, todas as requisições que falham resultam em HTTP 500. Em V2, o Circuit Breaker intercepta essas falhas e retorna HTTP 202 com uma mensagem informando que o pagamento foi agendado para processamento posterior.
+    
+    \item \textbf{Cenário Catástrofe -- Fallback como Salvação:} No cenário de falha catastrófica, 62,1\% das respostas em V2 vieram do fallback. Isso significa que o Circuit Breaker transformou requisições que seriam erros fatais em respostas úteis ao usuário.
+    
+    \item \textbf{Cenário Rajadas -- Fallback Seletivo:} No cenário de rajadas, 34,6\% das respostas vieram do fallback, demonstrando que o CB ativa o fallback apenas durante os picos de falha, liberando as requisições normais quando a dependência se recupera.
+\end{enumerate}
+
+\subsection{Redução de Falhas}
+
+A Figura \ref{fig:failure_reduction_detailed} quantifica a redução de falhas HTTP 500 proporcionada pelo Circuit Breaker.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/03_failure_reduction.png}
+\caption{Redução de falhas HTTP 500 -- Antes e depois do Circuit Breaker}
+\label{fig:failure_reduction_detailed}
+\end{figure}
+
+\textbf{Impacto Quantificado:}
+\begin{itemize}
+    \item \textbf{Rajadas:} Redução de falhas de \textbf{91,0\%} (de 37,0\% para 3,3\%)
+    \item \textbf{Catástrofe:} Redução de falhas de \textbf{92,3\%} (de 64,3\% para 4,9\%)
+\end{itemize}
+
+Estes resultados demonstram que o Circuit Breaker não elimina completamente as falhas (algumas ocorrem durante o período de detecção), mas reduz drasticamente sua frequência, transformando a maioria em respostas de degradação graciosa.
+
+\subsection{Redução de Downtime}
+
+A Figura \ref{fig:downtime_comparison} apresenta a comparação do tempo de indisponibilidade (downtime) entre V1 e V2.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/04_downtime_comparison.png}
+\caption{Comparação de downtime -- Circuit Breaker reduz tempo de indisponibilidade}
+\label{fig:downtime_comparison}
+\end{figure}
+
+\textbf{Redução de Downtime:}
+\begin{itemize}
+    \item \textbf{Rajadas:} Downtime de 4,82 min (V1) $\rightarrow$ 0,43 min (V2) --- redução de \textbf{91\%}
+    \item \textbf{Catástrofe:} Downtime de 8,37 min (V1) $\rightarrow$ 0,64 min (V2) --- redução de \textbf{92\%}
+\end{itemize}
+
+O downtime é calculado considerando o tempo em que o sistema retornou erros HTTP 500. Com o Circuit Breaker, o sistema mantém-se ``disponível'' do ponto de vista do usuário, pois retorna HTTP 202 (fallback) em vez de HTTP 500 durante as falhas da dependência.
+
+\subsection{Visão Consolidada}
+
+A Figura \ref{fig:combined_summary} apresenta uma visão consolidada de todas as métricas comparativas.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/05_combined_summary.png}
+\caption{Resumo consolidado do impacto do Circuit Breaker nos cenários Rajadas e Catástrofe}
+\label{fig:combined_summary}
+\end{figure}
+
+\subsection{Discussão dos Resultados}
+
+Os resultados obtidos nos cenários de Rajadas e Catástrofe validam três características fundamentais do padrão Circuit Breaker:
+
+\begin{enumerate}
+    \item \textbf{Fail-Fast com Degradação Graciosa:} Em vez de aguardar timeouts ou retornar erros, o sistema retorna imediatamente uma resposta alternativa significativa (HTTP 202). Isso preserva a experiência do usuário e a utilidade do sistema.
+    
+    \item \textbf{Elasticidade:} No cenário de rajadas, o Circuit Breaker demonstrou capacidade de abrir durante os picos de falha e fechar novamente quando a dependência se recuperou, maximizando tanto a proteção quanto a disponibilidade.
+    
+    \item \textbf{Proteção de Recursos:} Durante a catástrofe total, o Circuit Breaker evitou que threads ficassem bloqueadas aguardando respostas de uma dependência indisponível, liberando recursos para processar outras requisições.
+\end{enumerate}
+
+\subsection{Eficácia do Mecanismo de Detecção: Análise Técnica}
+
+Um aspecto notável dos resultados é a capacidade do Circuit Breaker de ``antecipar'' corretamente os cenários de falha através do seu mecanismo de detecção baseado em \textbf{sliding window} (janela deslizante). Esta seção analisa tecnicamente como o CB conseguiu ativar o fallback predominantemente durante os períodos de falha real, enquanto maximizou o aproveitamento dos períodos saudáveis.
+
+\textbf{Mecanismo de Detecção por Janela Deslizante:}
+
+O Circuit Breaker implementado utiliza uma configuração de sliding window com os seguintes parâmetros:
+\begin{itemize}
+    \item \texttt{slidingWindowSize}: 10 requisições
+    \item \texttt{failureRateThreshold}: 50\%
+    \item \texttt{waitDurationInOpenState}: 5 segundos
+    \item \texttt{permittedNumberOfCallsInHalfOpenState}: 3 requisições
+\end{itemize}
+
+A máquina de estados do CB opera da seguinte forma:
+\begin{enumerate}
+    \item \textbf{Estado FECHADO:} O CB monitora as últimas 10 requisições. Quando a taxa de falhas ultrapassa 50\% (5 ou mais falhas em 10 requisições), o circuito abre.
+    
+    \item \textbf{Estado ABERTO:} Todas as requisições são imediatamente direcionadas ao fallback, sem tentar a dependência externa. O circuito permanece aberto por 5 segundos.
+    
+    \item \textbf{Estado SEMIABERTO:} Após 5 segundos, o CB permite 3 requisições de teste. Se essas requisições forem bem-sucedidas, o circuito fecha. Caso contrário, retorna ao estado aberto.
+\end{enumerate}
+
+\textbf{Correlação entre Estado do CB e Falhas Reais:}
+
+Os dados demonstram uma correlação forte entre as transições de estado do CB e os períodos de falha real da dependência:
+
+\begin{itemize}
+    \item \textbf{Cenário Catástrofe:} Durante os 5 minutos de indisponibilidade total, o CB permaneceu predominantemente no estado ABERTO, acionando o fallback para 62,1\% das requisições. As primeiras 5-10 requisições após o início da falha resultaram em HTTP 500 (necessárias para detectar a falha), mas as subsequentes já foram protegidas pelo fallback.
+    
+    \item \textbf{Cenário Rajadas:} A natureza intermitente das falhas testou a elasticidade do CB. O mecanismo de sliding window reagiu rapidamente às ondas de falha, abrindo o circuito durante os picos e fechando-o durante os períodos de recuperação. Isso resultou em 34,6\% de fallback --- significativamente menor que no cenário de catástrofe --- demonstrando que o CB \textbf{não aplicou fallback desnecessariamente} durante os períodos saudáveis.
+\end{itemize}
+
+\textbf{Análise da Taxa de Fallback vs. Taxa de Erro:}
+
+A relação entre a taxa de fallback da V2 e a taxa de erro da V1 (que representa a taxa de falha ``real'' da dependência) é reveladora:
+
+\begin{table}[H]
+\centering
+\caption{Correlação entre fallback V2 e falhas V1}
+\label{tab:correlacao-fallback}
+\begin{tabular}{lccc}
+\toprule
+Cenário & V1 Falhas (\%) & V2 Fallback (\%) & Cobertura (\%) \\
+\midrule
+Rajadas & 37,0\% & 34,6\% & 93,5\% \\
+Catástrofe & 64,3\% & 62,1\% & 96,6\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A \textbf{taxa de cobertura} (calculada como $\frac{\text{Fallback V2}}{\text{Falhas V1}} \times 100$) indica que o CB conseguiu ``cobrir'' mais de 93\% dos cenários onde ocorreriam falhas reais. Os erros residuais em V2 (3,3\% em Rajadas e 4,9\% em Catástrofe) correspondem principalmente às requisições iniciais necessárias para o CB detectar a degradação --- um custo inevitável e aceitável do mecanismo de detecção.
+
+\textbf{Transições de Estado e Aproveitamento de Períodos Saudáveis:}
+
+No cenário de Rajadas, a diferença entre as taxas de sucesso direto (HTTP 200) de V1 (63,0\%) e V2 (62,0\%) foi de apenas 1 ponto percentual. Isso demonstra que o CB \textbf{não bloqueou requisições desnecessariamente} --- durante os períodos em que a dependência estava saudável, o circuito permanecia fechado, permitindo respostas diretas.
+
+Esta característica de ``fail-fast inteligente'' é possível graças ao mecanismo de half-open state, que permite ao CB ``sondar'' periodicamente a saúde da dependência e reabrir o fluxo normal assim que a recuperação é detectada.
+
+\textbf{Conclusão desta análise:} Os cenários de Rajadas e Catástrofe demonstram inequivocamente que o Circuit Breaker é uma ferramenta essencial para garantir a resiliência de microsserviços que dependem de APIs externas. A melhoria de mais de 90\% na redução de falhas e o ganho de até 59 pontos percentuais na taxa de sucesso justificam plenamente a adoção deste padrão em sistemas de produção crítica.
+
+\section{Análise de Tempos de Resposta}
+
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/03_response_time_percentiles.png}
+\caption{Distribuição de tempos de resposta -- Percentis por cenário}
+\label{fig:response_percentiles}
+\end{figure}
+
+A análise dos percentis de tempo de resposta revela outro benefício crucial do Circuit Breaker: \textbf{previsibilidade}. Enquanto a V1 apresentou alta variância nos tempos de resposta dependendo do estado da dependência, a V2 manteve tempos consistentemente baixos devido ao mecanismo de fail-fast.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/distributions.png}
+\caption{Distribuição estatística dos tempos de resposta -- V1 vs V2}
+\label{fig:distributions}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/distribution_boxplot.png}
+\caption{Box plot de tempo de resposta por cenário}
+\label{fig:distribution-boxplot}
+\end{figure}
+
+\subsection{Análise de Consistência e Variabilidade}
+
+Além das métricas tradicionais de latência, foi calculado o \textbf{Coeficiente de Variação (CV)} para cada cenário, definido como a razão entre o desvio padrão e a média do tempo de resposta. Esta métrica quantifica a \textbf{previsibilidade} do sistema --- valores menores indicam comportamento mais consistente.
+
+A redução do CV na V2 tem implicações práticas importantes: sistemas mais previsíveis facilitam o dimensionamento de recursos, melhoram a experiência do usuário (que não enfrenta oscilações de latência) e simplificam a definição de SLAs baseados em percentis.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/05_status_distribution.png}
+\caption{Distribuição de códigos de status HTTP por cenário}
+\label{fig:status_distribution}
+\end{figure}
+
+A Figura \ref{fig:status_distribution} mostra a distribuição de códigos de status HTTP para cada cenário. Observa-se claramente que a V2 substitui erros HTTP 500 por respostas HTTP 202 (fallback), mantendo o sistema funcional para o usuário final.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/10_error_rates.png}
+\caption{Taxas de erro -- V1 vs V2 por cenário}
+\label{fig:error_rates}
+\end{figure}
+
+A Figura \ref{fig:error_rates} evidencia a redução dramática nas taxas de erro proporcionada pelo Circuit Breaker, especialmente no cenário de indisponibilidade extrema onde a taxa de erro caiu de 89,5\% para apenas 0,4\%.
+
+\section{Contribuição do Mecanismo de Fallback}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/08_fallback_contribution.png}
+\caption{Contribuição do fallback para a taxa de sucesso da V2}
+\label{fig:fallback_contribution}
+\end{figure}
+
+O gráfico da Figura \ref{fig:fallback_contribution} ilustra como o fallback contribuiu para a taxa de sucesso em cada cenário. No cenário de Indisponibilidade Extrema, \textbf{99,1\%} das respostas bem-sucedidas vieram do fallback, demonstrando que o sistema manteve sua utilidade mesmo com a dependência quase completamente indisponível.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/timeline_comparison.png}
+\caption{Comparação temporal de tempos de resposta -- V1 vs V2}
+\label{fig:timeline_comparison}
+\end{figure}
+
+A Figura \ref{fig:timeline_comparison} apresenta a evolução temporal dos tempos de resposta ao longo de todos os cenários de teste. Observa-se que a V2 demonstra recuperação mais rápida devido ao mecanismo de fallback.
+
+\section{Análise de Throughput}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/04_throughput_comparison.png}
+\caption{Comparação de throughput -- V1 vs V2}
+\label{fig:throughput}
+\end{figure}
+
+Além da taxa de sucesso, o throughput (vazão) é uma métrica crítica. A V2 manteve throughput superior em cenários de falha porque não desperdiçou threads aguardando timeouts. Isso se traduz em maior capacidade de processamento sob estresse.
+
+\section{Visualizações Acadêmicas Avançadas}
+
+Para uma análise mais aprofundada dos resultados, foram geradas visualizações adicionais que complementam a análise quantitativa.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/violin_latency_comparison.png}
+\caption{Violin plot -- Distribuição de latência por versão}
+\label{fig:violin_latency}
+\end{figure}
+\vspace{-1em}
+
+A Figura \ref{fig:violin_latency} apresenta um \textit{violin plot} que combina box plot com estimativa de densidade kernel. Observa-se que a V2 apresenta distribuição mais concentrada em tempos baixos (corpo mais largo na parte inferior), enquanto V1 e V3 apresentam maior dispersão.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/heatmap_success_rate.png}
+\caption{Heatmap de taxa de sucesso por versão e cenário}
+\label{fig:heatmap_success}
+\end{figure}
+\vspace{-1em}
+
+O heatmap da Figura \ref{fig:heatmap_success} permite visualizar rapidamente a performance relativa de cada versão em cada cenário. As cores mais intensas indicam maior taxa de sucesso, tornando evidente o destaque da V2 em todos os cenários de estresse.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/06_consolidated_metrics_radar.png}
+\caption{Gráfico radar -- Métricas consolidadas V1 vs V2}
+\label{fig:radar_metrics}
+\end{figure}
+\vspace{-1em}
+
+O gráfico radar da Figura \ref{fig:radar_metrics} oferece uma visão holística das diferenças entre V1 e V2, normalizando as métricas para permitir comparação direta. A área coberta pela V2 é consistentemente maior nas dimensões de disponibilidade, throughput e tempo de resposta.
+
+\section{Análise Estatística Formal}
+
+Para validar estatisticamente a diferença entre as versões V1 e V2, aplicamos testes estatísticos adequados ao grande volume de dados. Dado que dados de performance de software raramente seguem distribuição normal — apresentando distribuições assimétricas com cauda longa e outliers frequentes — optamos por complementar os testes paramétricos com medidas não-paramétricas de tamanho de efeito.
+
+\begin{table}[H]
+\centering
+\caption{Análise estatística comparativa -- V1 vs V2}
+\label{tab:analise-estatistica}
+\begin{tabular}{lr}
+\toprule
+Métrica & Valor \\
+\midrule
+Teste t (V1 vs V2) & p < 0,0001 \\
+Tamanho do Efeito (Cliff's Delta) & 0,38 (médio) \\
+\midrule
+ANOVA (V1 vs V2 vs V3) & F = 546,79, p < 0,0001 \\
+Eta-quadrado ($\eta^2$) & 0,267 (grande) \\
+\midrule
+Intervalo de Confiança 95\% (V1) & [495,86; 508,01] ms \\
+Intervalo de Confiança 95\% (V2) & [400,72; 410,62] ms \\
+Intervalo de Confiança 95\% (V3) & [543,38; 558,02] ms \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Interpretação dos Resultados Estatísticos:}
+
+O teste t revela uma diferença estatisticamente significativa entre V1 e V2 (p < 0,0001), indicando que as distribuições de tempos de resposta são distintas. O \textbf{Cohen's d} ($d = 1,078$) classifica o \textit{effect size} como \textbf{grande}, confirmando que a diferença observada possui relevância prática substancial.
+
+A ANOVA confirmou diferença significativa entre os três grupos (F = 546,79, p < 0,0001), com $\eta^2 = 0,267$ indicando um efeito grande.
+
+\subsection{Considerações sobre Medidas Não-Paramétricas}
+
+Embora o Cohen's d seja amplamente utilizado, ele assume distribuição normal e é sensível a outliers. Para dados de latência — que tipicamente apresentam distribuições assimétricas — o \textbf{Cliff's Delta} ($\delta$) oferece uma alternativa robusta \cite{romano2006}. O Cliff's Delta quantifica a frequência com que os valores de um grupo são maiores que os de outro, sendo ``distribution-free'' e baseado nos ranks das observações.
+
+A Tabela \ref{tab:effect-size-thresholds} apresenta os limiares de interpretação para ambas as medidas.
+
+\begin{table}[H]
+\centering
+\caption{Limiares de interpretação para tamanho de efeito}
+\label{tab:effect-size-thresholds}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Magnitude} & \textbf{Cohen's d} & \textbf{Cliff's Delta ($\delta$)} \\
+\midrule
+Negligenciável & < 0,20 & < 0,147 \\
+Pequeno & 0,20 & 0,147 \\
+Médio & 0,50 & 0,330 \\
+Grande & 0,80 & 0,474 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O valor observado de Cliff's Delta = 0,38 corresponde a um efeito \textbf{médio}. Embora menor que o valor de Cohen's d (que indicaria efeito grande), o Cliff's Delta é a medida mais conservadora e apropriada para dados não-paramétricos com muitos outliers, confirmando que o Circuit Breaker oferece uma melhoria consistente e robusta na resiliência do sistema, independentemente da distribuição dos dados.
+
+\section{Análise da Versão V3 (Retry com Backoff Exponencial)}
+
+Para complementar a análise, foi implementada uma terceira versão do serviço de pagamento utilizando \textbf{apenas} o padrão Retry com backoff exponencial, \textbf{sem} Circuit Breaker.
+
+\subsection{Configuração do Padrão Retry}
+\begin{itemize}
+    \item \texttt{maxAttempts}: 3 tentativas
+    \item \texttt{waitDuration}: 500ms (inicial)
+    \item \texttt{exponentialBackoffMultiplier}: 2 (500ms → 1s → 2s)
+    \item \texttt{enableExponentialBackoff}: true
+\end{itemize}
+
+\subsection{Resultados Comparativos V3}
+
+\begin{table}[H]
+\centering
+\caption{Comparação detalhada -- V1 vs V2 vs V3}
+\label{tab:v3-comparison}
+\begin{tabular}{lrrr}
+\toprule
+Cenário & V1 (Baseline) & V2 (CB) & V3 (Retry) \\
+\midrule
+Catástrofe & 35,7\% & \textbf{95,1\%} & 52,8\% \\
+Degradação & 75,4\% & \textbf{95,4\%} & 76,4\% \\
+Indisponibilidade & 10,5\% & \textbf{99,6\%} & 15,7\% \\
+Normal & 100,0\% & 100,0\% & 100,0\% \\
+Rajadas & 63,0\% & \textbf{96,7\%} & 77,7\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Observações Críticas sobre o Padrão Retry:}
+
+\begin{enumerate}
+    \item \textbf{Retry NÃO melhora disponibilidade em falhas persistentes:} A V3 apresentou taxas de sucesso apenas marginalmente melhores que a V1, demonstrando que o Retry é ineficaz quando a dependência está consistentemente indisponível.
+    
+    \item \textbf{Retry aumenta a latência:} O tempo de resposta da V3 foi significativamente maior que a V1 devido às retentativas. Cada requisição que falha consome tempo adicional aguardando os retries.
+    
+    \item \textbf{Retry pode amplificar problemas:} Com 3 tentativas por requisição, o Retry pode triplicar a carga sobre uma dependência já sobrecarregada, potencialmente agravando a situação.
+\end{enumerate}
+
+\textbf{Conclusão sobre V3:} O padrão Retry é útil para falhas \textit{transitórias} e esporádicas, mas \textbf{não substitui} o Circuit Breaker. A combinação ideal é usar Retry \textit{dentro} do Circuit Breaker, permitindo tentativas rápidas enquanto o circuito está fechado, mas acionando fallback quando a dependência está persistentemente indisponível.
+
+\section{Discussão Geral e Impacto do Circuit Breaker}
+
+Os resultados experimentais validam inequivocamente a eficácia do padrão Circuit Breaker e revelam as limitações do padrão Retry isolado. Os principais benefícios observados foram:
+
+\begin{enumerate}
+    \item \textbf{Prevenção de Falhas em Cascata:} O CB isolou o \texttt{servico-pagamento} das falhas do \texttt{servico-adquirente}, impedindo que a indisponibilidade se propagasse.
+    \item \textbf{Degradação Graciosa:} Em vez de retornar erros HTTP 500, o sistema retornou HTTP 202 com uma mensagem útil ao usuário.
+    \item \textbf{Proteção de Recursos:} O mecanismo fail-fast liberou threads rapidamente, evitando thread pool starvation.
+    \item \textbf{Elasticidade:} O CB demonstrou capacidade de abrir e fechar dinamicamente conforme o estado da dependência.
+    \item \textbf{Superioridade sobre Retry:} Enquanto V3 (Retry) não melhorou disponibilidade significativamente, a V2 alcançou até 99,6\% com fallback.
+\end{enumerate}
+
+\textbf{Impacto Quantificado:} A Tabela \ref{tab:impacto-quantificado} resume os principais ganhos proporcionados pelo Circuit Breaker.
+
+\begin{table}[H]
+\centering
+\caption{Impacto quantificado do Circuit Breaker por cenário}
+\label{tab:impacto-quantificado}
+\begin{tabular}{lccc}
+\toprule
+Cenário & V1 Sucesso & V2 Sucesso & Ganho \\
+\midrule
+Catástrofe & 35,7\% & 95,1\% & \textbf{+59,3pp} \\
+Degradação & 75,4\% & 95,4\% & \textbf{+20,0pp} \\
+Indisponibilidade & 10,5\% & 99,6\% & \textbf{+89,1pp} \\
+Normal & 100,0\% & 100,0\% & +0,0pp \\
+Rajadas & 63,0\% & 96,7\% & \textbf{+33,6pp} \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -12,21 +12,30 @@ Gera relatórios comparativos detalhados mostrando:
 
 import os
 import json
+import time
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from jinja2 import Template
 import numpy as np
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 
 warnings.filterwarnings('ignore')
+
+# Import do loader otimizado
+try:
+    from fast_loader import FastK6Loader
+    USE_FAST_LOADER = True
+except ImportError:
+    USE_FAST_LOADER = False
 
 RESULTS_DIR = "k6/results/scenarios"
 OUTPUT_DIR = "analysis_results/scenarios"
 PLOTS_DIR = os.path.join(OUTPUT_DIR, "plots")
 CSV_DIR = os.path.join(OUTPUT_DIR, "csv")
 
-PALETTE = {"V1": "#d62728", "V2": "#2ca02c"}
+PALETTE = {"V1": "#d62728", "V2": "#2ca02c", "V3": "#1f77b4"}
 
 ESTIMATED_DURATIONS = {
     "catastrofe": 13 * 60,
@@ -54,12 +63,40 @@ class ScenarioAnalyzer:
         self.test_duration_seconds = None
         
     def load_data(self):
-        """Carrega dados do cenário"""
+        """Carrega dados do cenário usando FastK6Loader quando disponível."""
+        start_time = time.time()
         print(f"\n📂 Carregando dados do cenário: {self.scenario_name}")
         
-        self.data = {}
+        if USE_FAST_LOADER:
+            print("  🚀 Usando FastK6Loader (otimizado)")
+            loader = FastK6Loader(
+                results_dir=self.results_dir,
+                use_cache=True
+            )
+            self.data = loader.load_scenario(self.scenario_name)
+        else:
+            self._load_data_legacy()
+        
+        # Carrega summaries
         self.summary = {}
-        for version in ["V1", "V2"]:
+        for version in ["V1", "V2", "V3"]:
+            summary_path = os.path.join(self.results_dir, f"{self.scenario_name}_{version}_summary.json")
+            if os.path.exists(summary_path):
+                with open(summary_path, 'r') as f:
+                    try:
+                        self.summary[version] = json.load(f)
+                    except json.JSONDecodeError:
+                        print(f"  ⚠️  {version}: Não foi possível interpretar o summary JSON")
+        
+        self.test_duration_seconds = self._infer_test_duration()
+        
+        elapsed = time.time() - start_time
+        print(f"  ⏱️  Tempo de carregamento: {elapsed:.2f}s")
+    
+    def _load_data_legacy(self):
+        """Carregamento legado para fallback."""
+        self.data = {}
+        for version in ["V1", "V2", "V3"]:
             file_path = os.path.join(self.results_dir, f"{self.scenario_name}_{version}.json")
             
             if os.path.exists(file_path):
@@ -79,18 +116,6 @@ class ScenarioAnalyzer:
                     print(f"  ⚠️  {version}: Nenhum ponto encontrado")
             else:
                 print(f"  ❌ {version}: Arquivo não encontrado")
-
-            summary_path = os.path.join(self.results_dir, f"{self.scenario_name}_{version}_summary.json")
-            if os.path.exists(summary_path):
-                with open(summary_path, 'r') as f:
-                    try:
-                        self.summary[version] = json.load(f)
-                    except json.JSONDecodeError:
-                        print(f"  ⚠️  {version}: Não foi possível interpretar o summary JSON")
-            else:
-                print(f"  ⚠️  {version}: Summary não encontrado")
-
-        self.test_duration_seconds = self._infer_test_duration()
     
     def _infer_test_duration(self):
         durations = []
@@ -287,13 +312,14 @@ class ScenarioAnalyzer:
         # Percentis
         metrics = ['P50 (ms)', 'P95 (ms)', 'P99 (ms)']
         x = np.arange(len(metrics))
-        width = 0.35
-        
-        v1_values = [self.response_df[self.response_df['Version'] == 'V1'][m].values[0] for m in metrics]
-        v2_values = [self.response_df[self.response_df['Version'] == 'V2'][m].values[0] for m in metrics]
-        
-        axes[0].bar(x - width/2, v1_values, width, label='V1', color=PALETTE['V1'])
-        axes[0].bar(x + width/2, v2_values, width, label='V2', color=PALETTE['V2'])
+        versions_present = self.response_df['Version'].tolist()
+        bar_group_width = 0.8
+        width = bar_group_width / max(len(versions_present), 1)
+
+        for i, v in enumerate(versions_present):
+            v_values = [self.response_df[self.response_df['Version'] == v][m].values[0] for m in metrics]
+            offset = -bar_group_width / 2 + (i + 0.5) * width
+            axes[0].bar(x + offset, v_values, width, label=v, color=PALETTE.get(v, '#333333'))
         axes[0].set_xlabel('Percentil')
         axes[0].set_ylabel('Tempo (ms)')
         axes[0].set_title('Comparação de Latência (P50, P95, P99)')
@@ -303,7 +329,7 @@ class ScenarioAnalyzer:
         axes[0].grid(True, alpha=0.3)
         
         # Distribuição de velocidade
-        versions = ['V1', 'V2']
+        versions = versions_present
         fast = [self.response_df[self.response_df['Version'] == v]['Fast Requests (%)'].values[0] for v in versions]
         slow = [self.response_df[self.response_df['Version'] == v]['Slow Requests (%)'].values[0] for v in versions]
         

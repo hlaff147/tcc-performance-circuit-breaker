@@ -4,4 +4,9 @@ matplotlib
 seaborn
 jinja2
 prometheus-api-client
+scipy
+# Performance optimizations
+orjson          # Parser JSON 3-10x mais rápido
+pyarrow         # Cache Parquet para reutilização
+tqdm            # Barra de progresso
 # k6-summary (opcional, para parsing avançado do JSON do k6)

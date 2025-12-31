@@ -1,0 +1,79 @@
+\documentclass[10pt,twocolumn]{article}
+
+% Essential packages (basic TeX Live)
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\setlist{nosep} % Global setting for compact lists
+\usepackage{url}
+\usepackage{float}
+\usepackage{geometry}
+\usepackage{times}
+
+% Page layout similar to IEEE
+\geometry{
+    letterpaper,
+    left=0.68in,
+    right=0.68in,
+    top=0.75in,
+    bottom=1in,
+    columnsep=0.25in
+}
+
+% Settings
+\graphicspath{{images/}}
+\raggedbottom
+
+% Title formatting
+\makeatletter
+\renewcommand{\maketitle}{%
+    \twocolumn[%
+        \begin{center}
+            {\LARGE\bfseries\@title\par}
+            \vskip 1em
+            {\large\@author\par}
+            \vskip 1.5em
+        \end{center}
+    ]%
+}
+\makeatother
+
+\begin{document}
+
+\title{Quantitative Evaluation of the Circuit Breaker Pattern\\in Microservices: An Empirical Study on Resilience and Performance}
+
+\author{
+\textbf{Humberto Laff}\\
+Centro de Inform\'atica (CIn)\\
+Universidade Federal de Pernambuco (UFPE)\\
+Recife, Brazil\\
+\textit{hlaff@cin.ufpe.br}
+}
+
+\maketitle
+
+\begin{abstract}
+Microservices architectures have become the standard for building modern distributed systems, but synchronous communication between services introduces the risk of cascading failures. The Circuit Breaker pattern is widely recommended as a mitigation strategy, yet there is a lack of empirical studies quantifying its actual impact. This paper presents a controlled experimental evaluation comparing three service versions: V1 (Baseline without resilience), V2 (Circuit Breaker with Resilience4j), and V3 (Retry with exponential backoff). Using Docker orchestration and k6 load testing across five realistic failure scenarios, we analyzed over 380,000 requests. Results demonstrate that Circuit Breaker improved availability from 10.5\% to 99.6\% in extreme unavailability scenarios---a 9.5x improvement. Statistical analysis confirmed a large effect size (Cohen's d = 1.078, p $<$ 0.0001). Our findings provide robust empirical evidence that Circuit Breaker is essential for mission-critical synchronous microservices, while Retry alone is insufficient for persistent failures.
+\end{abstract}
+
+\noindent\textbf{Keywords:} Circuit Breaker, Microservices, Fault Tolerance, Resilience Patterns, Performance Evaluation
+
+\vspace{1em}
+
+% Sections
+\input{sections/introducao}
+\input{sections/trabalhos_relacionados}
+\input{sections/metodologia}
+\input{sections/resultados}
+\input{sections/conclusao}
+
+% References
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

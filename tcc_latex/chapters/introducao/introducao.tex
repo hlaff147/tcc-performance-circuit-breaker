@@ -1,0 +1,46 @@
+\chapter{Introdução}
+\label{cap:introducao}
+
+\section{Contextualização}
+A era dos microsserviços consolidou-se no cenário corporativo. A adoção de arquiteturas de microsserviços tornou-se onipresente em organizações que precisam construir plataformas digitais de grande escala, disponibilidade contínua e ciclos de evolução acelerados. Ecossistemas de comércio eletrônico e, em especial, sistemas de processamento de pagamentos, são exemplos emblemáticos desse movimento, pois demandam flexibilidade para incorporar novos meios de pagamento, tolerância a falhas e capacidade de adaptação rápida a volumes variáveis de transações. O particionamento de funcionalidades em serviços independentes facilita o desenvolvimento paralelo, a escalabilidade seletiva e a implantação contínua. Contudo, essa independência lógica é sustentada por interações em tempo real entre serviços, frequentemente estabelecidas por APIs REST e clientes declarativos como o Spring Cloud OpenFeign. A comunicação síncrona simplifica a implementação e a observabilidade, mas introduz um forte acoplamento temporal: o serviço consumidor permanece bloqueado até que a resposta do serviço dependente seja recebida ou um timeout seja atingido. Esse padrão, quando aplicado a cadeias críticas como autorizações financeiras, amplifica a fragilidade do sistema diante de latências elevadas ou indisponibilidade intermitente na infraestrutura externa.
+
+\section{Definição do Problema}
+
+O risco inerente à comunicação síncrona constitui o cerne desta investigação. O problema investigado neste trabalho — \textbf{falhas em cascata causadas por comunicação síncrona entre microsserviços} — é transversal a diversos domínios da engenharia de software: e-commerce, logística, saúde, fintechs, streaming, IoT, entre outros. Qualquer sistema distribuído que dependa de chamadas HTTP síncronas está sujeito aos riscos aqui analisados.
+
+Este trabalho adota o \textbf{domínio de pagamentos on-line} como contexto experimental. A escolha foi motivada pela relevância do domínio na área de sistemas financeiros, onde a resiliência é requisito crítico e falhas têm impacto direto na receita e experiência do usuário. Contudo, os resultados e conclusões deste estudo são \textbf{generalizáveis} para qualquer arquitetura de microsserviços com dependências síncronas.
+
+\textbf{Cenário Hipotético Modelado:} Um \texttt{servico-pagamento} orquestra a jornada de checkout e depende, de forma síncrona, de um \texttt{servico-adquirente} responsável por encaminhar transações a gateways externos (Cielo, Rede, etc.). O risco emerge quando essa dependência apresenta degradação: se o \texttt{servico-adquirente} experimenta alta latência, o \texttt{servico-pagamento} aguarda até o timeout, mantendo threads bloqueadas. Com volume crescente de requisições, o pool de threads se esgota (\textbf{thread pool starvation}), provocando \textbf{falha em cascata} que interrompe todo o checkout.
+
+\section{Solução Proposta}
+Os padrões de resiliência e o Circuit Breaker emergem como resposta aos desafios descritos. Padrões de resiliência, tradicionalmente agrupados sob o guarda-chuva de \textit{fault tolerance}, surgem como contramedidas a essa fragilidade. Entre eles, o padrão Circuit Breaker (CB) destaca-se como um mecanismo sofisticado para conter falhas em cascata. O CB monitora as chamadas ao serviço dependente e opera segundo uma máquina de estados composta por três modos: \textbf{Fechado}, \textbf{Aberto} e \textbf{Semiaberto}. No estado Fechado, o serviço consumidor executa chamadas normalmente e o CB coleta métricas de sucesso e falha. Ao detectar uma taxa de falhas ou tempo de resposta acima de limites configurados, o circuito é \textbf{Aberto}, interrompendo novas tentativas de chamadas e falhando rapidamente (\textit{fail-fast}). Esse comportamento protege o serviço consumidor da exaustão de recursos e evita contribuir para a sobrecarga do serviço dependente. Após um período de resfriamento, o CB entra no estado \textbf{Semiaberto}, permitindo um número controlado de chamadas de teste. Se elas forem bem-sucedidas, o circuito retorna ao estado Fechado; caso contrário, reabre. Além disso, é comum empregar mecanismos de \textit{fallback} para entregar respostas degradadas, mas ainda úteis, enquanto o serviço dependente se recupera. Dessa forma, o Circuit Breaker harmoniza a necessidade de disponibilidade do consumidor com a estabilidade do ecossistema.
+
+\section{Justificativa}
+Apesar da vasta literatura sobre arquiteturas de microsserviços e padrões de resiliência, observa-se uma lacuna significativa no que diz respeito a \textbf{estudos experimentais quantitativos} que demonstrem, com dados empíricos, o impacto real do padrão Circuit Breaker. Grande parte da documentação disponível limita-se a descrições conceituais ou exemplos triviais que não capturam a complexidade de cenários reais de falha.
+
+A relevância desta investigação é corroborada pelo impacto financeiro do tempo de inatividade em sistemas críticos. Estima-se que o custo de \textit{downtime} em sistemas bancários varia entre \textbf{US\$ 5.600 e US\$ 9.000 por minuto} \cite{bankingdowntime2024}. Em grandes empresas de tecnologia, as perdas podem atingir US\$ 146.000 a US\$ 450.000 por hora de indisponibilidade. Com o crescimento exponencial do volume de transações digitais, a resiliência torna-se não apenas um requisito técnico, mas um imperativo de negócio.
+
+Este TCC preenche essa lacuna ao \textbf{implementar} uma POC (Prova de Conceito) que simula um ecossistema de microsserviços com dependência síncrona, instrumentado com Resilience4j, e \textbf{executar} campanhas de benchmark com Docker e k6 para \textbf{medir} empiricamente vazão, latência (p95) e taxa de erro sob cenários controlados. Embora o contexto escolhido seja pagamentos — por familiaridade do autor com o domínio — os padrões de falha simulados (indisponibilidade, degradação, rajadas) são \textbf{universais} em sistemas distribuídos, tornando os resultados aplicáveis a e-commerce, logística, saúde, IoT e qualquer domínio que utilize comunicação síncrona entre serviços.
+
+\section{Objetivos}
+
+\subsection{Objetivo Geral}
+Avaliar quantitativamente o impacto do padrão Circuit Breaker no desempenho e na resiliência de microsserviços com comunicação síncrona, utilizando uma POC no domínio de pagamentos como estudo de caso.
+
+\subsection{Objetivos Específicos}
+\begin{enumerate}
+    \item Implementar uma POC simplificada composta por \texttt{servico-pagamento} e \texttt{servico-adquirente}, utilizando Spring Boot, Spring Cloud OpenFeign e orquestração via Docker.
+    \item Desenvolver múltiplas versões do \texttt{servico-pagamento}: (V1) Baseline com timeouts básicos, (V2) com Resilience4j, Circuit Breaker e fallback, e (V3) com Circuit Breaker + Time Limiter para análise de cenários de latência.
+    \item Construir e executar benchmarks automatizados com k6 para simular cenários de falha universais: indisponibilidade total, degradação gradual, rajadas intermitentes e indisponibilidade prolongada.
+    \item Analisar comparativamente as métricas de vazão, latência e taxa de erro, destacando os benefícios e custos da adoção do Circuit Breaker.
+\end{enumerate}
+
+\section{Organização do Trabalho}
+Este trabalho está organizado da seguinte forma:
+\begin{itemize}
+    \item O \textbf{Capítulo \ref{cap:fundamentacao}} apresenta a fundamentação teórica sobre microsserviços, comunicação síncrona e padrões de resiliência.
+    \item O \textbf{Capítulo \ref{cap:metodologia}} detalha a metodologia experimental, incluindo o ambiente, ferramentas e cenários de teste.
+    \item O \textbf{Capítulo \ref{cap:implementacao}} descreve a implementação técnica dos serviços e configurações utilizadas.
+    \item O \textbf{Capítulo \ref{cap:resultados}} apresenta e discute os resultados obtidos nos experimentos.
+    \item O \textbf{Capítulo \ref{cap:conclusao}} conclui o trabalho, sintetizando as contribuições e sugerindo trabalhos futuros.
+\end{itemize}

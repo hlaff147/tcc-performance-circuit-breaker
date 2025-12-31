@@ -107,21 +107,17 @@ class PaymentServiceTest {
     class FailureScenarios {
 
         @Test
-        @DisplayName("Deve mapear HTTP 503 do adquirente para falha interna")
-        void shouldMapServiceUnavailableToFailure() {
+        @DisplayName("Deve propagar erro (5xx) quando adquirente retorna 503")
+        void shouldPropagateWhenAcquirerReturns503() {
             // Arrange
             when(acquirerClient.autorizarPagamento(eq("falha"), any()))
                 .thenReturn(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body("Serviço indisponível"));
 
-            // Act
-            PaymentResponse response = paymentService.processPayment("falha", sampleRequest);
-
-            // Assert
-            assertThat(response.status()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-            assertThat(response.message()).contains("indisponível");
-            assertThat(response.fallback()).isFalse();
-            assertThat(response.outcome()).isEqualTo(PaymentResponse.PaymentOutcome.FAILURE);
+            // Act & Assert
+            assertThatThrownBy(() -> paymentService.processPayment("falha", sampleRequest))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("indisponível");
         }
 
         @Test
@@ -132,7 +128,11 @@ class PaymentServiceTest {
                 .thenReturn(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Erro"));
 
             // Act
-            paymentService.processPayment("falha", sampleRequest);
+            try {
+                paymentService.processPayment("falha", sampleRequest);
+            } catch (Exception ignored) {
+                // esperado
+            }
 
             // Assert
             Counter failureCounter = meterRegistry.find("payment.outcome")
@@ -178,20 +178,16 @@ class PaymentServiceTest {
         }
 
         @Test
-        @DisplayName("Deve retornar fallback genérico para outras exceções")
-        void shouldReturnGenericFallbackForOtherExceptions() {
+        @DisplayName("Deve propagar exceção (5xx) para outras falhas")
+        void shouldPropagateForOtherExceptions() {
             // Arrange
             RuntimeException genericException = new RuntimeException("Timeout");
 
-            // Act
-            PaymentResponse response = paymentService.processPaymentFallback(
-                "normal", sampleRequest, genericException);
-
-            // Assert
-            assertThat(response.status()).isEqualTo(HttpStatus.ACCEPTED);
-            assertThat(response.message()).contains("processamento posterior");
-            assertThat(response.fallback()).isTrue();
-            assertThat(response.outcome()).isEqualTo(PaymentResponse.PaymentOutcome.ACCEPTED_ASYNC);
+            // Act & Assert
+            assertThatThrownBy(() -> paymentService.processPaymentFallback(
+                "normal", sampleRequest, genericException))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Timeout");
         }
 
         @Test
@@ -226,7 +222,11 @@ class PaymentServiceTest {
             
             when(acquirerClient.autorizarPagamento(any(), any()))
                 .thenReturn(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Erro"));
-            paymentService.processPayment("falha", sampleRequest);
+            try {
+                paymentService.processPayment("falha", sampleRequest);
+            } catch (Exception ignored) {
+                // esperado
+            }
             
             paymentService.processPaymentFallback("normal", sampleRequest, 
                 mock(CallNotPermittedException.class));

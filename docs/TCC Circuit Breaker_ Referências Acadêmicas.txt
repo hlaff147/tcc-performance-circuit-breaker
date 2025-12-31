@@ -1,0 +1,157 @@
+﻿Engenharia de Resiliência em Microsserviços: Uma Investigação Profunda sobre o Padrão Circuit Breaker, Modelagem Estocástica e Validação Experimental em Sistemas de Pagamento
+A evolução das arquiteturas de software, partindo de sistemas monolíticos clássicos em direção a ecossistemas de microsserviços, representou uma mudança fundamental na forma como aplicações escaláveis e modulares são concebidas.1 Motivada pela necessidade de agilidade organizacional e implantação independente, essa transição permitiu que grandes aplicações complexas fossem decompostas em serviços autônomos menores, facilitando iterações rápidas e reduzindo o tempo de lançamento no mercado.2 Entretanto, a distribuição inerente dessas arquiteturas introduziu desafios críticos de confiabilidade, tolerância a falhas e a necessidade de orquestração de transações distribuídas, complicando significativamente o processo de design.1 Em ambientes onde milhares de unidades de serviço interagem através de cadeias de dependência, as aplicações tornam-se altamente vulneráveis a falhas em cascata originadas em pontos únicos de falha.3
+Fundamentos e Taxonomia da Dependabilidade em Sistemas Distribuídos
+Para compreender a resiliência em microsserviços, é imperativo estabelecer uma base teórica sobre a dependabilidade. Conforme a taxonomia seminal de Avizienis, a dependabilidade é definida como a capacidade de evitar falhas de serviço que sejam mais frequentes ou severas do que o aceitável para os usuários.4 Esse conceito é sustentado por seis atributos fundamentais: disponibilidade (fornecimento de serviços corretos), confiabilidade (funcionamento contínuo conforme esperado), segurança, confidencialidade, integridade e manutenibilidade.4 No contexto de microsserviços, a disponibilidade e a confiabilidade são frequentemente os atributos mais impactados pela latência de rede e falhas de infraestrutura.4
+O modelo de falha-erro-mau funcionamento (fault-error-failure) fornece a estrutura para analisar a degradação do sistema. Uma falha (fault) é a causa raiz, que pode ser física, de interação ou de desenvolvimento. Um erro (error) é o estado interno anormal resultante dessa falha. Por fim, o mau funcionamento ou falha de sistema (failure) ocorre quando o serviço deixa de cumprir sua especificação perante o usuário externo.4 Em microsserviços, as falhas de timing — onde uma resposta correta é entregue fora da janela temporal aceitável — são tão críticas quanto as falhas de conteúdo, especialmente em sistemas de pagamento que operam sob rigorosos Acordos de Nível de Serviço (SLAs).4
+Arquitetura de Microsserviços e o Problema do Acoplamento Temporal
+A arquitetura de microsserviços (MSA) é considerada a sucessora da Arquitetura Orientada a Serviços (SOA), apresentando padrões mais amplamente aceitos e atributos mais claros de independência.4 Cada nó de microsserviço funciona como uma unidade independente de lógica de negócio, mas a comunicação entre esses nós introduz vulnerabilidades. Protocolos de comunicação leves, embora eficientes, não garantem por si só a entrega sem perdas ou corrupção em ambientes de rede instáveis.4
+A distinção entre comunicação síncrona e assíncrona é central para a análise de resiliência. A comunicação síncrona, baseada em modelos de requisição-resposta como HTTP ou gRPC, cria um acoplamento temporal onde o serviço emissor deve aguardar a conclusão do processamento pelo serviço receptor.5 Esse bloqueio consome recursos finitos, como threads e sockets, tornando o sistema vulnerável a gargalos.6 Em contrapartida, a Arquitetura Orientada a Eventos (EDA) promove o desacoplamento temporal através do uso de mensagens assíncronas, onde os componentes operam em paralelo e não esperam uma resposta imediata, minimizando as chances de formação de gargalos sistêmicos.5
+Atributo
+	Comunicação Síncrona
+	Comunicação Assíncrona (EDA)
+	Acoplamento
+	Forte (Temporal e Espacial)
+	Fraco (Baseado em Eventos)
+	Latência
+	Ditada pelo serviço mais lento
+	Processamento em paralelo
+	Consistência
+	Imediata (tipicamente)
+	Eventual (Brewer, 2020)
+	Complexidade
+	Menor (fluxo linear)
+	Maior (gerenciamento de eventos/logs)
+	Tolerância a Falhas
+	Exige padrões como Circuit Breaker
+	Naturalmente resiliente a indisponibilidade
+	Embora a EDA ofereça vantagens claras em termos de elasticidade e robustez, a comunicação síncrona permanece necessária para operações que exigem confirmação imediata de estado, como a validação de crédito em uma jornada de checkout.5
+A Dinâmica das Falhas em Cascata e o Modelo BSN-OCF
+As falhas em cascata representam o risco existencial mais significativo para aplicações de microsserviços em larga escala. Quando um serviço unidade falha ou apresenta latência excessiva, seus dependentes diretos começam a acumular requisições, esgotando seus próprios recursos e propagando a falha para níveis superiores da cadeia de chamadas.3 Este fenômeno é exacerbado pela distribuição dos serviços em múltiplos dispositivos na rede, tornando a localização de bugs e a contenção de erros tarefas desafiadoras.4
+Para quantificar essa vulnerabilidade, pesquisadores propuseram o modelo BSN-OCF (Business Sink Node-Oriented Cascading Failure). Este modelo utiliza a teoria de redes complexas para descrever a MA (Microservice Application) através de duas camadas: a camada de rede física e a camada de aplicação.3 Diferente de modelos topológicos tradicionais, o BSN-OCF introduz o conceito de "nó sumidouro de negócio" (business sink node), permitindo o cálculo preciso da carga e capacidade das unidades de serviço sob estresse.3 A avaliação da vulnerabilidade é realizada através do método AMSL (Assessment Method of Structural Loss), que foca na perda de valor de negócio em vez de apenas na perda de conectividade da rede, reconhecendo que em microsserviços, redes parcialmente conectadas ainda podem sustentar funções de negócio críticas.3
+A instabilidade em sistemas distribuídos pode ter impactos financeiros severos. Estima-se que o tempo de inatividade do sistema em grandes empresas possa custar entre US$ 146.000 e US$ 450.000 por hora.4 Em setores como o bancário, onde o volume de transações cresce exponencialmente (atingindo 266,2 bilhões de pagamentos instantâneos em 2023), atrasos de apenas algumas centenas de milissegundos impactam diretamente a satisfação do cliente e a conversão de pagamentos.7
+Padrões de Resiliência: O Papel do Circuit Breaker
+Para mitigar o impacto de interrupções parciais, desenvolvedores implementam padrões de resiliência bem conhecidos, como Retry, Fail Fast e Circuit Breaker.9 O padrão Circuit Breaker, introduzido originalmente por Michael Nygard em "Release It!", atua como um interruptor automático que protege o sistema contra sobrecargas e falhas persistentes.9
+Anatomia e Estados do Circuit Breaker
+O funcionamento do Circuit Breaker é análogo a um disjuntor elétrico que interrompe o fluxo de corrente quando detecta uma anomalia. Ele opera em três estados fundamentais:
+1. Fechado (Closed): O estado de operação normal. As requisições fluem livremente para o serviço de destino. O disjuntor monitora as taxas de sucesso e falha através de uma janela deslizante.12 Se o número de falhas ultrapassa um limite pré-definido (por exemplo, 50% de erro em 10 segundos), o disjuntor transita para o estado aberto.11
+2. Aberto (Open): Todas as chamadas ao serviço alvo são interceptadas e falham imediatamente, sem que a requisição chegue à rede. Isso impede o desperdício de recursos no chamador e dá tempo para o serviço de destino se recuperar.11 Durante este período, mecanismos de fallback podem fornecer respostas alternativas, como dados em cache ou mensagens de erro amigáveis.12
+3. Entreaberto (Half-Open): Após um período de repouso (sleep window), o disjuntor permite que um número limitado de requisições de teste passe para o serviço. Se essas requisições forem bem-sucedidas, presume-se que o serviço se recuperou e o disjuntor volta ao estado fechado. Caso contrário, ele retorna ao estado aberto e reinicia o cronômetro de espera.11
+A eficácia do Circuit Breaker é notável. Estudos indicam que a implementação correta deste padrão pode reduzir as taxas de erro em até 58% durante períodos de instabilidade, protegendo a estabilidade global do sistema.12
+Comparação com outros Padrões de Resiliência
+Embora o Circuit Breaker seja robusto, ele é frequentemente utilizado em conjunto com outros padrões para criar uma estratégia de defesa em profundidade:
+* Retry (Retentativa): Útil para falhas transitórias de curta duração. Ele re-executa a operação falha esperando que o problema na rede ou no receptor tenha sido resolvido.9 Entretanto, retentativas agressivas sem backoff exponencial podem causar tempestades de requisições, piorando a situação de um serviço já sobrecarregado.13 O Retry melhora a taxa de sucesso em cerca de 21% em condições ideais.12
+* Bulkhead (Anteparo): Isola recursos (como pools de threads ou conexões de banco de dados) para diferentes serviços. Isso garante que a exaustão de recursos em um componente não se propague para outros, melhorando a disponibilidade do sistema em cerca de 10%.12
+* Timeout (Tempo Limite): Define um limite máximo de espera para uma resposta. A configuração adequada do timeout é crítica; valores muito curtos causam falhas falsas e aumentam o turnover de requisições, enquanto valores muito longos causam starvation de threads no chamador.6
+* Rate Limiter (Limitador de Taxa): Controla a taxa de entrada de requisições para evitar que um serviço seja inundado além de sua capacidade de processamento.15
+Padrão
+	Mecanismo
+	Benefício Principal
+	Risco Associado
+	Circuit Breaker
+	Corte de fluxo baseado em erro
+	Previne falhas em cascata
+	Configuração de limiar imprecisa
+	Retry
+	Repetição de chamadas
+	Recupera falhas transitórias
+	Amplificação de carga (Retry Storm)
+	Bulkhead
+	Compartimentalização de recursos
+	Isolamento de falhas
+	Overhead de gerenciamento de pools
+	Timeout
+	Interrupção por tempo de espera
+	Liberação de recursos bloqueados
+	Descarte de requisições válidas
+	Ecossistemas de Implementação: Resilience4j e Netflix Hystrix
+No ecossistema Java e Spring Boot, a evolução das bibliotecas de resiliência reflete a maturidade da arquitetura de microsserviços. O Netflix Hystrix foi, durante anos, a ferramenta padrão, introduzindo o conceito de comandos isolados e dashboards de monitoramento em tempo real.13 No entanto, o Hystrix entrou em modo de manutenção em 2018, abrindo espaço para o Resilience4j.16
+Paradigma Funcional vs. Orientado a Objetos
+O Resilience4j diferencia-se do Hystrix por sua abordagem baseada em programação funcional e modularidade. Enquanto o Hystrix exige que cada chamada seja envolvida em um objeto HystrixCommand, o Resilience4j utiliza decoradores de funções que podem ser empilhados (ex: Retry sobre Circuit Breaker sobre Bulkhead) sem a necessidade de herança complexa.13 Além disso, o Resilience4j não impõe o uso de pools de threads separados para cada disjuntor por padrão, utilizando a thread do chamador e reduzindo a sobrecarga de troca de contexto, o que o torna ideal para aplicações de alto desempenho.13
+Para sistemas bancários e fintechs, o Spring Cloud Circuit Breaker fornece uma camada de abstração que permite alternar entre implementações (Resilience4j, Sentinel, Spring Retry) mantendo uma API consistente.16 Essa flexibilidade é vital para garantir que a infraestrutura de resiliência possa evoluir sem exigir reescrita massiva do código de negócio.16
+Modelagem Formal com Redes de Petri Estocásticas (SPN)
+A complexidade das interações em microsserviços torna a intuição humana insuficiente para prever falhas. A modelagem formal, especificamente através de Redes de Petri Estocásticas (SPN) e Cadeias de Markov de Tempo Contínuo (CTMC), permite a análise rigorosa antes da implantação.17
+Aplicação das SPN em Microsserviços
+As Redes de Petri são ferramentas de modelagem gráfica e matemática adequadas para sistemas concorrentes, paralelos e distribuídos. Nas SPN, transições são associadas a taxas de disparo que seguem distribuições de probabilidade (geralmente exponencial), permitindo a avaliação de métricas de desempenho como throughput, tempo de resposta médio e probabilidade de descarte de requisições.10
+Estudos utilizando a ferramenta Mercury demonstram que a modelagem SPN pode ser usada para avaliar a elasticidade de máquinas virtuais e o impacto de estratégias de replicação na disponibilidade de sistemas cloud-native.10 Em microsserviços com Circuit Breaker, a rede de Petri pode capturar os estados do disjuntor como "lugares" (places) e as falhas/recuperações como "transições", permitindo simular como diferentes limiares afetam o comportamento do sistema sob cargas variáveis.10
+Verificação com PRISM e Model Checking
+Para uma análise ainda mais profunda, o verificador de modelos probabilísticos PRISM é utilizado para analisar padrões de resiliência capturados como CTMCs.9 Essa abordagem permite quantificar o impacto de cada padrão em múltiplos atributos de qualidade e determinar a configuração ótima de parâmetros (como tamanho da janela e tempo de repouso) para lidar com condições de disponibilidade variáveis.9 Resultados de model checking mostram que, sob baixas taxas de falha, tanto Retry quanto Circuit Breaker têm impacto mínimo na performance; contudo, conforme a taxa de falha aumenta, o Circuit Breaker protege o chamador de forma muito mais eficaz do que retentativas contínuas, que degradam a performance severamente.19
+Avaliação Experimental e Benchmarks de Performance
+A validação de teorias de resiliência exige experimentação prática rigorosa. O uso de injeção de falhas controlada (Chaos Engineering) e testes de carga automatizados é a base para coletar dados de performance realistas.8
+O Simulador MiSim e Testes de Carga
+O MiSim é um simulador extensível projetado especificamente para a avaliação de resiliência em microsserviços. Ele suporta a injeção de falhas (como a morte de instâncias ou injeção de latência) e a simulação de mecanismos comuns como Circuit Breaker e Autoscaler.8 Ao utilizar modelos de entrada JSON leves para descrever a arquitetura e o experimento, o MiSim fornece até 25 métricas de performance, permitindo insights quantitativos sobre o comportamento transitório complexo do sistema.8
+Na prática, ferramentas como Grafana k6 e Locust são empregadas para gerar carga sintética contra Provas de Conceito (POCs). Em cenários de sistemas de pagamento, os testes focam em validar se a introdução do Circuit Breaker evita que o esgotamento de threads no serviço de checkout impacte a experiência do usuário quando o gateway adquirente está offline.7
+O Estudo de Caso de Pagamentos Bancários
+A transição de bancos monolíticos para microsserviços é impulsionada pela necessidade de lidar com picos esporádicos mas previsíveis de tráfego, como períodos de feriados e pagamentos de salários.7 O custo do downtime em bancos é estimado entre US$ 5.600 e US$ 9.000 por minuto.21 A implementação de uma camada de Circuit Breaker via Resilience4j, integrada com Service Discovery (Eureka) e API Gateway, permite que essas instituições reduzam o tempo de inatividade para níveis mínimos da indústria e acelerem o time-to-market em 40%.7
+Análise Estatística em Performance de Software
+Dados de performance de software raramente seguem uma distribuição normal. A presença de latências de cauda, gargalos de recursos e variabilidade de rede resulta em distribuições assimétricas e com muitos outliers.22 Portanto, o uso de estatística paramétrica clássica pode levar a conclusões errôneas.24
+Justificativa para Testes Não-Paramétricos
+Enquanto testes paramétricos como o teste t assumem normalidade e homogeneidade de variância, testes não-paramétricos como Mann-Whitney U e Wilcoxon Signed-Rank são "distribution-free". Eles utilizam os postos (ranks) das observações em vez dos valores reais, tornando-os robustos contra distribuições extremamente enviesadas e outliers.22
+* Vantagem 1: Funcionam com amostras pequenas onde a normalidade não pode ser verificada.23
+* Vantagem 2: São adequados para dados ordinais ou com limites naturais (como o 0 em tempos de resposta).26
+* Vantagem 3: Focam na mediana, que é frequentemente uma medida de tendência central mais representativa do que a média para dados de latência.23
+Medidas de Effect Size: Cohen's d e Cliff's Delta
+A significância estatística (p-valor) informa se existe uma diferença, mas não sua magnitude prática. Para isso, utiliza-se o tamanho do efeito (effect size).28
+1. Cohen's d: Calcula a diferença entre as médias normalizada pelo desvio padrão. É amplamente utilizado, mas sofre com distribuições não-normais, pois o desvio padrão é sensível a outliers.24
+2. Cliff's Delta ($\delta$): Uma medida não-paramétrica que quantifica a frequência com que os valores de um grupo são maiores que os de outro. O Cliff's Delta é robusto a violações de normalidade e heterocedasticidade.29
+A relação entre Cohen's d e Cliff's Delta pode ser entendida através da sobreposição das distribuições. Um Cliff's Delta de 0,33 corresponde a um Cohen's d de 0,50 (efeito médio), indicando uma não-sobreposição de 33% entre os grupos.29 Em experimentos de software engineering, o Cliff's Delta fornece uma visão mais confiável da melhoria real proporcionada por um padrão de resiliência sobre a linha de base.29
+Magnitude
+	Cohen's d
+	Cliff's Delta (δ)
+	Negligenciável
+	< 0.20
+	< 0.147
+	Pequeno
+	0.20
+	0.147
+	Médio
+	0.50
+	0.330
+	Grande
+	0.80
+	0.474
+	Convergência de Resultados e Implicações para o TCC
+Os dados coletados em estudos experimentais de Circuit Breaker revelam padrões consistentes. Em cenários de falha catastrófica (100% indisponibilidade), a melhoria na taxa de sucesso reportada por sistemas resilientes chega a quase 60 pontos percentuais em comparação com sistemas sem proteção.12 Em cenários de indisponibilidade extrema (75% do tempo offline), o Circuit Breaker mantém o sistema estável com taxas de sucesso próximas a 99%, enquanto sistemas básicos colapsam para menos de 10% de sucesso.12
+A análise estatística dos experimentos de resiliência frequentemente apresenta um Cohen's d superior a 1,0, o que é classificado como um efeito "muito grande" na literatura de engenharia de software.28 Isso valida a hipótese de que o Circuit Breaker não é apenas uma melhoria incremental, mas uma mudança de ordem de magnitude na robustez operacional de microsserviços síncronos.
+Síntese Matemática da Resiliência
+Para modelar o tempo de resposta esperado $E$ em um sistema com Circuit Breaker, pode-se utilizar a formulação de Cadeias de Markov onde os estados $S \in \{Closed, Open, HalfOpen\}$ determinam a taxa de serviço $\mu$. No estado $Open$, a taxa de serviço efetiva para o chamador torna-se instantânea (erro de fallback), minimizando o tempo de ocupação de threads:
+
+
+$$E = P(S=Closed) \cdot T_{real} + P(S=Open) \cdot T_{fallback} + P(S=HalfOpen) \cdot T_{test}$$
+Onde $T_{fallback} \ll T_{real}$, resultando em uma redução drástica da latência média percebida pelo sistema chamador quando o alvo está degradado.9
+Conclusões e Direções Futuras
+A pesquisa demonstra que o padrão Circuit Breaker é um componente indispensável na arquitetura de microsserviços contemporânea. Sua capacidade de isolar falhas, proteger recursos críticos e permitir a degradação graciosa do sistema é validada tanto por modelos formais (SPN, CTMC) quanto por evidências empíricas em domínios críticos como o de pagamentos.3
+As tendências futuras apontam para o uso de Circuit Breakers adaptativos baseados em Machine Learning, capazes de prever falhas antes que elas ocorram e ajustar dinamicamente seus parâmetros para otimizar o compromisso entre latência e taxa de sucesso.15 Além disso, a integração nativa desses padrões em Service Meshes e infraestruturas Kubernetes-native promete tornar a resiliência uma característica intrínseca da plataforma, e não apenas uma responsabilidade do código da aplicação.11
+Para o desenvolvimento de um TCC rigoroso, é essencial que os resultados experimentais sejam interpretados à luz das distribuições de probabilidade reais e validados por medidas de tamanho de efeito robustas, como o Cliff's Delta, garantindo que as conclusões sobre a eficácia do Resilience4j reflitam ganhos práticos reais em ambientes de produção de alta escala.29
+Referências citadas
+1. Designing Microservices Using AI: A Systematic Literature Review - UNLP, acessado em dezembro 21, 2025, https://host170.sedici.unlp.edu.ar/server/api/core/bitstreams/5940b87a-2484-4c12-b457-82d465be9fb3/content
+2. Designing Microservices Using AI: A Systematic Literature Review - Semantic Scholar, acessado em dezembro 21, 2025, https://pdfs.semanticscholar.org/3e7b/0645c75334935f5ed7ce4eed1ab7d303ddca.pdf
+3. BSN-OCF: Businesses Sink Node-Oriented ... - IEEE Xplore, acessado em dezembro 21, 2025, https://ieeexplore.ieee.org/iel8/11033175/11033221/11033336.pdf
+4. SoK: Microservice Architectures from a Dependability ... - arXiv, acessado em dezembro 21, 2025, https://arxiv.org/pdf/2503.03392
+5. (PDF) Exploring event-driven architecture in microservices- patterns, pitfalls and best practices - ResearchGate, acessado em dezembro 21, 2025, https://www.researchgate.net/publication/388709044_Exploring_event-driven_architecture_in_microservices-_patterns_pitfalls_and_best_practices
+6. Examining the Design Patterns of Microservices for Achieving Performance Quality Tactics, acessado em dezembro 21, 2025, http://ijeais.org/wp-content/uploads/2022/12/IJAISR221202.pdf
+7. Application Of Spring Boot Microservice Architecture for Scaling Banking Applications - The USA Journals, acessado em dezembro 21, 2025, https://www.theamericanjournals.com/index.php/tajet/article/download/6673/6108/8875
+8. MiSim: A Simulator for Resilience Assessment of ... - dqualizer, acessado em dezembro 21, 2025, https://dqualizer.github.io/files/QRS22-FrankWagnerHakamianStraesserVanHoorn2022MiSim-preprint-nodoi.pdf
+9. Model-Based Analysis of Microservice Resiliency Patterns, acessado em dezembro 21, 2025, http://acme.able.cs.cmu.edu/pubs/uploads/pdf/PID63707632020_ICSA_Microservices.pdf
+10. Performance Modeling of Microservices with Circuit Breakers using ..., acessado em dezembro 21, 2025, https://www.researchgate.net/publication/381492451_Performance_Modeling_of_Microservices_with_Circuit_Breakers_using_Stochastic_Petri_Nets
+11. (PDF) Circuit Breaker Patterns for Resilient Java Microservices - ResearchGate, acessado em dezembro 21, 2025, https://www.researchgate.net/publication/396907130_Circuit_Breaker_Patterns_for_Resilient_Java_Microservices
+12. Microservices Design Patterns for Cloud Architecture – IEEE ..., acessado em dezembro 21, 2025, https://ieeechicago.org/microservices-design-patterns-for-cloud-architecture/
+13. Build Resilient Microservices: Circuit Breakers, Retries - DZone, acessado em dezembro 21, 2025, https://dzone.com/articles/how-to-build-resilient-microservices-using-circuit
+14. Service-Level Objective-Aware Load-Adaptive Timeout: Balancing Failure Rate and Latency in Microservices Communication - IEEE Xplore, acessado em dezembro 21, 2025, https://ieeexplore.ieee.org/iel8/6287639/10820123/11113294.pdf
+15. Fault-Tolerant Software Architecture: A Comprehensive Analysis of Design Patterns, Implementation Strategies and Performance Evaluation, acessado em dezembro 21, 2025, https://ijsret.com/wp-content/uploads/IJSRET_V11_issue4_133.pdf
+16. Resilience4j vs Hystrix. What would be the best for fault tolerance? - Stack Overflow, acessado em dezembro 21, 2025, https://stackoverflow.com/questions/70587963/resilience4j-vs-hystrix-what-would-be-the-best-for-fault-tolerance
+17. MSCFS-RP: A Colored-Petri-Net-Based Analysis Model for Master–Slave Cloud File Systems with Replication Pipelining - MDPI, acessado em dezembro 21, 2025, https://www.mdpi.com/2079-9292/13/14/2852
+18. Mercury 6.1: a Unified Platform for Stochastic Modeling, Analysis, and Decision Support, acessado em dezembro 21, 2025, https://www.computer.org/csdl/proceedings-article/issrew/2025/532500a057/2c5M7eGosQo
+19. When Failure is (Not) an Option: Reliability Models for Microservices ..., acessado em dezembro 21, 2025, https://www.researchgate.net/publication/348226943_When_Failure_is_Not_an_Option_Reliability_Models_for_Microservices_Architectures
+20. Automated Testing and Resilience of Microservice's Network-link using Istio Service Mesh - Fruct, acessado em dezembro 21, 2025, https://www.fruct.org/publications/volume-31/fruct31/files/Kar.pdf
+21. Application Of Spring Boot Microservice ... - The USA Journals, acessado em dezembro 21, 2025, https://theamericanjournals.com/index.php/tajet/article/download/6673/6108/8875
+22. Nonparametric statistical tests: friend or foe? - PMC, acessado em dezembro 21, 2025, https://pmc.ncbi.nlm.nih.gov/articles/PMC8979661/
+23. Nonparametric Tests vs. Parametric Tests - Statistics By Jim, acessado em dezembro 21, 2025, https://statisticsbyjim.com/hypothesis-testing/nonparametric-parametric-tests/
+24. effect size | basic statistics, acessado em dezembro 21, 2025, https://garstats.wordpress.com/tag/effect-size/
+25. Understanding the Differences: Parametric vs Non-Parametric Test Analysis in Semiconductors - yieldWerx, acessado em dezembro 21, 2025, https://yieldwerx.com/blog/understanding-the-differences-parametric-vs-non-parametric-test-analysis-in-semiconductors/
+26. Parametric vs. Non-Parametric Statistical Tests, acessado em dezembro 21, 2025, https://einsteinmed.edu/uploadedfiles/centers/ictr/new/parametric-vs-non-parametric-statistical-tests.pdf
+27. Parametric and Nonparametric Tests in Spine Research: Why Do They Matter? - PMC, acessado em dezembro 21, 2025, https://pmc.ncbi.nlm.nih.gov/articles/PMC6125939/
+28. A systematic review of effect size in software ... - IC-Unicamp, acessado em dezembro 21, 2025, https://www.ic.unicamp.br/~wainer/outros/systrev/24.pdf
+29. Using Cliff's Delta as a Non-Parametric Effect Size Measure: An ..., acessado em dezembro 21, 2025, https://openpublishing.library.umass.edu/pare/article/1977/galley/1980/view/
+30. Computation of Effect Sizes - Psychometrica, acessado em dezembro 21, 2025, https://www.psychometrica.de/effect_size.html
+31. Is Cliff's δ More Robust to Kurtosis than Robust Cohen's D? by Kit Duguay - MSpace, acessado em dezembro 21, 2025, https://mspace.lib.umanitoba.ca/bitstreams/e464d9c9-cc3d-48dc-84bc-5ae878bb4a1e/download
+32. Engineering Resilience: Cloud-Native Design Patterns for Fault- Tolerant Systems - Communications on Applied Nonlinear Analysis (ISSN: 1074-133X), acessado em dezembro 21, 2025, https://internationalpubls.com/index.php/cana/article/download/5958/3361/10607

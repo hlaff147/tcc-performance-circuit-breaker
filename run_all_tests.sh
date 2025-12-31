@@ -34,6 +34,7 @@ else
 fi
 
 mkdir -p "${K6_RESULTS_HOST_DIR}"
+chmod -R 777 "${K6_RESULTS_HOST_DIR}"
 
 SCENARIOS=(
   "Completo:cenario-completo.js"
@@ -157,10 +158,17 @@ main() {
     exit 1
   fi
 
+  INCLUDE_V3="${INCLUDE_V3:-false}"
+
   pushd "${PROJECT_ROOT}" >/dev/null
   trap '${DOCKER_COMPOSE_CMD} down --remove-orphans >/dev/null 2>&1 || true' EXIT
 
-  for version in v1 v2; do
+  versions=(v1 v2)
+  if [ "${INCLUDE_V3}" = "true" ]; then
+    versions+=(v3)
+  fi
+
+  for version in "${versions[@]}"; do
     run_k6_scenarios "${version}"
   done
 

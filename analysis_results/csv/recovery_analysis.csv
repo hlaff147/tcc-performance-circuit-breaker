@@ -1,0 +1,3 @@
+Scenario,Failure End (s),First Success (s),V2 Recovery Delta (s),Status
+catastrofe,330,542.142799917,212.14,Recovered
+rajadas,150,150.007086959,0.01,Recovered

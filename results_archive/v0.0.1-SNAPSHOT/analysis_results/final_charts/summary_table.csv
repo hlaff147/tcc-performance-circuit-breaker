@@ -1,5 +1,0 @@
-Cenário,V1 Sucesso Total,V2 Sucesso Total,V2 Fallback,Ganho,Red. Falhas
-Catastrofe,90.0%,94.5%,59.0%,+4.5pp,-44.8%
-Degradacao,94.7%,94.9%,0.0%,+0.2pp,-4.2%
-Indisponibilidade,10.1%,97.1%,92.8%,+86.9pp,-96.8%
-Rajadas,94.9%,95.2%,10.2%,+0.3pp,-5.8%
