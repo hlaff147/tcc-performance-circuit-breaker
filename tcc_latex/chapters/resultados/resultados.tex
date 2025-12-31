@@ -2,7 +2,16 @@
 \label{cap:resultados}
 
 \section{Introdução ao Capítulo}
-Os testes de carga foram executados usando \texttt{k6} e \texttt{Docker Compose}. Cada versão do \texttt{servico-pagamento} (V1-Baseline, V2-CircuitBreaker, V3-Retry) foi submetida aos cinco cenários de estresse (Normal, Falha Catastrófica, Degradação Gradual, Rajadas Intermitentes e Indisponibilidade Extrema). Os resultados foram avaliados contra os \texttt{thresholds} (limites de desempenho) definidos nos scripts e analisados em termos de taxa de sucesso, tempo de resposta e contribuição do mecanismo de fallback.
+Os testes de carga foram executados usando \texttt{k6} e \texttt{Docker Compose}. Cada versão do \texttt{servico-pagamento} (V1-Baseline, V2-CircuitBreaker, V3-Retry) foi submetida aos cinco cenários de estresse.
+
+Para clarificar a análise dos dados, definimos as seguintes categorias de resposta:
+\begin{itemize}
+    \item \textbf{Sucesso Real (HTTP 200/201):} Requisição processada com sucesso pela dependência externa.
+    \item \textbf{Sucesso por Degradação (HTTP 202):} Requisição interceptada pelo Circuit Breaker e tratada via fallback (apenas V2).
+    \item \textbf{Disponibilidade:} Soma de Sucesso Real e Sucesso por Degradação. Representa a capacidade do sistema de responder aos usuários sem erro.
+\end{itemize}
+
+Os resultados foram avaliados contra os \texttt{thresholds} definidos.
 
 \section{Visão Geral Consolidada dos Resultados}
 
@@ -467,7 +476,7 @@ Para validar estatisticamente a diferença entre as versões V1 e V2, aplicamos 
 Métrica & Valor \\
 \midrule
 Teste t (V1 vs V2) & p < 0,0001 \\
-Tamanho do Efeito (Cohen's d) & 1,078 (grande) \\
+Tamanho do Efeito (Cliff's Delta) & 0,38 (médio) \\
 \midrule
 ANOVA (V1 vs V2 vs V3) & F = 546,79, p < 0,0001 \\
 Eta-quadrado ($\eta^2$) & 0,267 (grande) \\
@@ -507,7 +516,7 @@ Grande & 0,80 & 0,474 \\
 \end{tabular}
 \end{table}
 
-O valor observado de Cohen's d = 1,078 corresponde a um efeito ``muito grande'' na literatura de engenharia de software, validando que o Circuit Breaker não representa apenas uma melhoria incremental, mas uma \textbf{mudança de ordem de magnitude} na robustez operacional de microsserviços síncronos.
+O valor observado de Cliff's Delta = 0,38 corresponde a um efeito \textbf{médio}. Embora menor que o valor de Cohen's d (que indicaria efeito grande), o Cliff's Delta é a medida mais conservadora e apropriada para dados não-paramétricos com muitos outliers, confirmando que o Circuit Breaker oferece uma melhoria consistente e robusta na resiliência do sistema, independentemente da distribuição dos dados.
 
 \section{Análise da Versão V3 (Retry com Backoff Exponencial)}
 

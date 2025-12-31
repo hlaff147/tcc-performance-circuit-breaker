@@ -1,0 +1,43 @@
+@startuml
+!theme plain
+skinparam componentStyle rectangle
+skinparam backgroundColor white
+skinparam packageStyle rectangle
+
+package "Experimental Environment (Docker)" {
+    [K6 Load Generator] as k6 #orange
+    
+    node "Spring Boot Microservices" {
+        [Payment Service\n(V1 / V2 / V3)] as payment #lightblue
+        [Acquirer Service\n(Simulator)] as acquirer #lightgrey
+    }
+}
+
+package "Monitoring & Analysis" {
+    database "Prometheus\n(Metrics Store)" as prom
+    [Python Scripts\n(Scientific Analysis)] as python #yellow
+    file "Academic Reports\n(LaTeX/PNG)" as final_report
+}
+
+k6 -right-> payment : "HTTP Load\n(Up to 200 VUs)"
+payment -right-> acquirer : "Feign Client\n(Synchronous)"
+payment .down.> prom : "Metric\nExport"
+prom .right.> python : "Input Data"
+python ..> final_report : "Generates"
+
+note bottom of acquirer
+  Simulates controlled scenarios:
+  - **Catastrophe**: 100% failure (5min)
+  - **Bursts**: intermittent outages
+  - **Degradation**: gradual latency/error increase
+  - **Unavailability**: 75% error rate
+end note
+
+note top of payment
+  **Resilience Versions:**
+  V1: Baseline (Timeout only)
+  V2: Circuit Breaker (Resilience4j)
+  V3: Retry (Exponential Backoff)
+end note
+
+@enduml

@@ -23,6 +23,9 @@ buildNumber.properties
 *.log
 logs/
 
+# Logs gerados por execuções paralelas (repo root)
+.parallel_logs/
+
 # Docker
 .env
 *.env
@@ -49,6 +52,12 @@ k6/results/scenarios/*.json
 # Manter apenas os arquivos de resumo (pequenos, ~8KB cada)
 !k6/results/*_summary.json
 !k6/results/scenarios/*_summary.json
+
+# Cache de leitura (Parquet) gerado pelo fast_loader.py
+k6/results/**/.cache/
+
+# Segurança extra: nunca versionar Parquet (cache/artefato local)
+*.parquet
 
 # ============================================
 # Analysis results - Gerados automaticamente

@@ -34,16 +34,16 @@ Os experimentos foram executados em um ambiente controlado com as seguintes espe
     \item \textbf{Rede:} Bridge network dedicada para isolamento
 \end{itemize}
 
-\textbf{Configuração do Circuit Breaker (V2):}
+\textbf{Configuração do Circuit Breaker (V2 - Perfil Equilibrado):}
 \begin{itemize}
     \item \texttt{failureRateThreshold}: 50\%
-    \item \texttt{slowCallRateThreshold}: 70\%
-    \item \texttt{slowCallDurationThreshold}: 3000ms
+    \item \texttt{slowCallRateThreshold}: 80\%
+    \item \texttt{slowCallDurationThreshold}: 2000ms
     \item \texttt{slidingWindowType}: COUNT\_BASED
-    \item \texttt{slidingWindowSize}: 10 requisições
-    \item \texttt{minimumNumberOfCalls}: 5
+    \item \texttt{slidingWindowSize}: 20 requisições
+    \item \texttt{minimumNumberOfCalls}: 10
     \item \texttt{waitDurationInOpenState}: 10s
-    \item \texttt{permittedNumberOfCallsInHalfOpenState}: 3
+    \item \texttt{permittedNumberOfCallsInHalfOpenState}: 5
 \end{itemize}
 
 \textbf{Repetições:} Cada cenário foi executado uma única vez por versão (V1 e V2), totalizando 8 execuções. A duração dos testes (9 a 13 minutos por cenário) e o volume de requisições (60.000 a 83.000 por teste) fornecem amostras estatisticamente significativas para análise.
@@ -117,7 +117,7 @@ O código HTTP 202 (Accepted) é particularmente importante pois representa a \t
 \begin{itemize}
     \item \textbf{V1: Baseline (Controle):} implementação ingênua que apenas configura timeouts curtos (por exemplo, 2 segundos) no Feign Client para conexão e leitura.
     \item \textbf{V2: Circuit Breaker + Fallback:} implementação robusta com Resilience4j. O Circuit Breaker é configurado para abrir após detectar, por exemplo, 50\% de falhas em uma janela de requisições. Quando o circuito está aberto, um método de fallback devolve HTTP 202 (Accepted) com a mensagem "Pagamento recebido e agendado para processamento posterior.", caracterizando a degradação graciosa.
-    \item \textbf{V3: Circuit Breaker + Time Limiter:} extensão da V2 que adiciona um limite de tempo (\textit{Time Limiter}) às chamadas. Requisições que excedem o timeout configurado são automaticamente interrompidas, forçando falhas que contribuem para a abertura do circuito. Essa configuração é particularmente eficaz em cenários de latência elevada, onde a dependência responde lentamente mas não falhando explicitamente.
+    \item \textbf{V3: Retry + Backoff Exponencial:} implementação alternativa ao Circuit Breaker que utiliza o padrão de \textit{Retry} (Retentativa). Configurada com até 3 tentativas, intervalo inicial de 500ms e multiplicador de backoff exponencial de 2, permitindo que falhas transitórias sejam superadas sem intervenção do usuário, mas com o risco de aumentar a latência e a carga no sistema.
 \end{itemize}
 
 \subsection{Variáveis Dependentes — Métricas coletadas via k6}
@@ -151,7 +151,7 @@ Quatro cenários de teste foram desenvolvidos em k6, cada um projetado para exer
     
     \item \textbf{Comportamento Esperado:}
     \begin{itemize}
-        \item \textit{V1 (Baseline):} Todas as requisições aguardam timeout (~3s), threads ficam bloqueadas, potencial cascata de falhas.
+        \item \textit{V1 (Baseline):} Todas as requisições aguardam timeout (~2s), threads ficam bloqueadas, potencial cascata de falhas.
         \item \textit{V2 (Circuit Breaker):} CB detecta falhas em ~10s, abre circuito, retorna fallback (HTTP 202) em <100ms.
     \end{itemize}
     
@@ -270,12 +270,12 @@ Quatro cenários de teste foram desenvolvidos em k6, cada um projetado para exer
     \item \textbf{Objetivo:} Medir o tempo de recuperação do CB e validar a transição automática entre estados (ABERTO $\rightarrow$ SEMI-ABERTO $\rightarrow$ FECHADO).
 \end{itemize}
 
-\subsection{Cenário 6 — Falhas Intermitentes com Latência (V3)}
+\subsection{Cenário 6 — Eficácia do Retry em Falhas Intermitentes (V3)}
 
-\textbf{Contexto Real:} Este cenário é projetado especificamente para demonstrar o valor da versão V3 (com Time Limiter). Simula uma dependência que alterna entre respostas normais, respostas lentas e falhas explícitas — um padrão comum em serviços sobrecarregados.
+\textbf{Contexto Real:} Este cenário é projetado para avaliar o comportamento do padrão Retry (V3) em comparação ao Circuit Breaker. Simula uma dependência com falhas esporádicas e latência variável.
 
 \begin{itemize}
-    \item \textbf{Descrição:} Combina falhas intermitentes com períodos de alta latência, testando a eficácia do Time Limiter em forçar a abertura do circuito quando a dependência está lenta mas não falhando explicitamente.
+    \item \textbf{Descrição:} O sistema é submetido a um padrão misto de respostas (sucesso, latência e falha) para verificar se o mecanismo de retentativa consegue recuperar requisições falhas ou se apenas introduz latência adicional.
     
     \item \textbf{Fases do Teste (12 minutos):}
     \begin{enumerate}
@@ -290,7 +290,7 @@ Quatro cenários de teste foram desenvolvidos em k6, cada um projetado para exer
     \begin{itemize}
         \item \textit{V1 (Baseline):} Sofre com latência acumulada; threads bloqueadas aguardando respostas lentas.
         \item \textit{V2 (Circuit Breaker):} Não abre o circuito apenas por lentidão se não houver falhas explícitas.
-        \item \textit{V3 (CB + Time Limiter):} O Time Limiter interrompe requisições lentas, gerando falhas que acionam o CB. Demonstra proteção superior em cenários de latência.
+        \item \textit{V3 (Retry):} Tenta recuperar falhas executando novas chamadas. Pode aumentar o sucesso em falhas isoladas, mas tende a degradar o tempo de resposta e amplificar a carga em falhas persistentes.
     \end{itemize}
     
     \item \textbf{Objetivo:} Validar que a combinação CB + Time Limiter oferece proteção mais completa que o CB isolado, especialmente em cenários de degradação de latência.

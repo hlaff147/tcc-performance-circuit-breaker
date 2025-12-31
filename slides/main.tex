@@ -1,0 +1,624 @@
+% ==============================================================================
+% Apresentação de TCC - Avaliação Quantitativa do Padrão Circuit Breaker
+% Autor: Humberto Laff
+% Instituição: Centro de Informática (CIn) - UFPE
+% Tema: CIn-UFPE (Vermelho institucional)
+% ==============================================================================
+
+\documentclass[aspectratio=169,12pt]{beamer}
+
+% ==============================================================================
+% TEMA CIn-UFPE
+% ==============================================================================
+
+% Tema base limpo
+\usetheme{default}
+\useinnertheme{rounded}
+\useoutertheme{miniframes}
+
+% Cores institucionais CIn-UFPE
+\definecolor{cinred}{RGB}{206, 49, 53}        % Vermelho CIn
+\definecolor{cinredark}{RGB}{166, 39, 43}     % Vermelho escuro
+\definecolor{cinredlight}{RGB}{236, 89, 93}   % Vermelho claro
+\definecolor{ufpegray}{RGB}{64, 64, 64}       % Cinza escuro UFPE
+\definecolor{ufpelightgray}{RGB}{245, 245, 245} % Cinza claro
+
+% Cores auxiliares para gráficos
+\definecolor{successgreen}{RGB}{46, 139, 87}
+\definecolor{failred}{RGB}{180, 40, 40}
+\definecolor{fallbackorange}{RGB}{230, 140, 30}
+\definecolor{neutralblue}{RGB}{70, 130, 180}
+
+% Aplicar cores ao tema
+\setbeamercolor{palette primary}{bg=cinred,fg=white}
+\setbeamercolor{palette secondary}{bg=cinredark,fg=white}
+\setbeamercolor{palette tertiary}{bg=ufpegray,fg=white}
+\setbeamercolor{palette quaternary}{bg=cinred,fg=white}
+
+\setbeamercolor{structure}{fg=cinred}
+\setbeamercolor{frametitle}{bg=cinred,fg=white}
+\setbeamercolor{title}{fg=cinred}
+\setbeamercolor{subtitle}{fg=ufpegray}
+\setbeamercolor{author}{fg=ufpegray}
+\setbeamercolor{institute}{fg=ufpegray}
+\setbeamercolor{date}{fg=ufpegray}
+
+\setbeamercolor{block title}{bg=cinred,fg=white}
+\setbeamercolor{block body}{bg=ufpelightgray,fg=black}
+
+\setbeamercolor{block title alerted}{bg=failred,fg=white}
+\setbeamercolor{block body alerted}{bg=failred!10,fg=black}
+
+\setbeamercolor{block title example}{bg=successgreen,fg=white}
+\setbeamercolor{block body example}{bg=successgreen!10,fg=black}
+
+\setbeamercolor{item}{fg=cinred}
+\setbeamercolor{subitem}{fg=cinredark}
+\setbeamercolor{itemize item}{fg=cinred}
+\setbeamercolor{enumerate item}{fg=cinred}
+
+% Fontes
+\setbeamerfont{title}{size=\Large,series=\bfseries}
+\setbeamerfont{subtitle}{size=\normalsize}
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamerfont{block title}{size=\normalsize,series=\bfseries}
+
+% ==============================================================================
+% CONFIGURAÇÕES DE LAYOUT
+% ==============================================================================
+
+% Remove navegação padrão
+\setbeamertemplate{navigation symbols}{}
+
+% Margens do Beamer - reduzir margens laterais e expandir área de texto
+\setbeamersize{text margin left=0.5cm, text margin right=0.5cm}
+
+% Rodapé mais compacto
+\setbeamertemplate{footline}{
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.33\paperwidth,ht=1.8ex,dp=0.3ex,center]{palette primary}%
+            \usebeamerfont{author in head/foot}\insertshortauthor
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.44\paperwidth,ht=1.8ex,dp=0.3ex,center]{palette secondary}%
+            \usebeamerfont{title in head/foot}\insertshorttitle
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.23\paperwidth,ht=1.8ex,dp=0.3ex,right]{palette tertiary}%
+            \usebeamerfont{date in head/foot}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+% Título do frame mais compacto
+\setbeamertemplate{frametitle}{
+    \vspace{0.1em}
+    \insertframetitle
+    \vspace{-0.5em}
+    \textcolor{cinredlight}{\rule{\textwidth}{0.8pt}}
+    \vspace{-0.3em}
+}
+
+% ==============================================================================
+% PACOTES
+% ==============================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{array}
+
+% Configuração de imagens
+\graphicspath{{../tcc_latex/images/}{./}}
+
+% ==============================================================================
+% INFORMAÇÕES DO DOCUMENTO
+% ==============================================================================
+
+\title[Circuit Breaker em Microsserviços]{Avaliação Quantitativa do Padrão\\Circuit Breaker em Microsserviços}
+\subtitle{Um Estudo Empírico sobre Resiliência e Performance}
+\author[Humberto Laff]{Humberto Laff}
+\institute[CIn-UFPE]{
+    Centro de Informática (CIn)\\
+    Universidade Federal de Pernambuco (UFPE)
+}
+\date{Dezembro de 2024}
+
+% Logo no título
+\titlegraphic{
+    \includegraphics[height=1.2cm]{logo_cin_ufpe.png}
+}
+
+% ==============================================================================
+% INÍCIO DO DOCUMENTO
+% ==============================================================================
+
+\begin{document}
+
+% ==============================================================================
+% SLIDE DE TÍTULO
+% ==============================================================================
+{
+\setbeamertemplate{footline}{} % Remove rodapé do título
+\begin{frame}
+    \begin{center}
+        \vspace{-1em}
+        \includegraphics[height=1.5cm]{logo_cin_ufpe.png}
+        
+        \vspace{1.5em}
+        
+        {\usebeamerfont{title}\usebeamercolor[fg]{title}\inserttitle\par}
+        
+        \vspace{0.5em}
+        
+        {\usebeamerfont{subtitle}\usebeamercolor[fg]{subtitle}\insertsubtitle\par}
+        
+        \vspace{1.5em}
+        
+        {\usebeamerfont{author}\usebeamercolor[fg]{author}\insertauthor\par}
+        
+        \vspace{0.5em}
+        
+        {\footnotesize\usebeamercolor[fg]{institute}\insertinstitute\par}
+        
+        \vspace{1em}
+        
+        {\footnotesize\usebeamercolor[fg]{date}\insertdate\par}
+    \end{center}
+\end{frame}
+}
+
+% ==============================================================================
+% AGENDA
+% ==============================================================================
+\begin{frame}{Agenda}
+    \tableofcontents
+\end{frame}
+
+% ==============================================================================
+% SEÇÃO 1: CONTEXTUALIZAÇÃO E PROBLEMA
+% ==============================================================================
+\section{Contextualização e Problema}
+
+\begin{frame}[shrink=30]{Contextualização}
+    \begin{columns}[T]
+        \begin{column}{0.55\textwidth}
+            \textbf{Era dos Microsserviços}
+            \begin{itemize}
+                \item Arquitetura predominante em sistemas de grande escala
+                \item Comunicação síncrona (REST/HTTP) como padrão
+                \item Flexibilidade + Escalabilidade + Deploy independente
+            \end{itemize}
+            
+            \vspace{0.2em}
+            \textbf{O Preço da Comunicação Síncrona}
+            \begin{itemize}
+                \item \textcolor{failred}{\textbf{Acoplamento temporal}} entre serviços
+                \item Requisições bloqueadas aguardando resposta
+                \item Timeout = recursos desperdiçados
+            \end{itemize}
+        \end{column}
+        \begin{column}{0.42\textwidth}
+            \begin{alertblock}{Custo do Downtime}
+                Em sistemas bancários:\\[0.2em]
+                \textbf{US\$ 5.600 - US\$ 9.000/min}
+            \end{alertblock}
+            
+            \vspace{0.2em}
+            \includegraphics[width=0.85\textwidth]{arquitetura_simplificada.png}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\begin{frame}[shrink=5]{O Problema: Falhas em Cascata}
+    \begin{center}
+        \textbf{\large O que acontece quando uma dependência falha?}
+    \end{center}
+    
+    \vspace{0.3em}
+    
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{block}{Cenário de Falha}
+                \centering
+                \texttt{[Usuário]}\\
+                $\downarrow$\\
+                \texttt{[servico-pagamento]}\\
+                $\downarrow$ \textcolor{failred}{\textbf{BLOQUEADO}}\\
+                \texttt{[servico-adquirente]}\\
+                $\downarrow$ \textcolor{failred}{\textbf{TIMEOUT}}\\
+                \texttt{[Gateway Externo]}
+            \end{block}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{alertblock}{Consequências}
+                \begin{enumerate}
+                    \item \textbf{Thread Pool Starvation}\\
+                          {\small Threads bloqueadas aguardando}
+                    \item \textbf{Efeito Dominó}\\
+                          {\small A falha de C derruba B e A}
+                    \item \textbf{Sistema Inutilizável}\\
+                          {\small Cascata de falhas}
+                \end{enumerate}
+            \end{alertblock}
+        \end{column}
+    \end{columns}
+    
+    \vspace{0.5em}
+    \begin{center}
+        \colorbox{cinred!10}{\textcolor{cinred}{\textbf{Problema:} Falhas em cascata causadas por comunicação síncrona entre microsserviços}}
+    \end{center}
+\end{frame}
+
+% ==============================================================================
+% SEÇÃO 2: SOLUÇÃO - CIRCUIT BREAKER
+% ==============================================================================
+\section{Solução: O Padrão Circuit Breaker}
+
+\begin{frame}[shrink=5]{O Padrão Circuit Breaker}
+    \begin{columns}[T]
+        \begin{column}{0.55\textwidth}
+            \textbf{Analogia:} Funciona como um \textbf{disjuntor elétrico}
+            \begin{itemize}
+                \item Detecta condições anormais
+                \item Interrompe o fluxo para proteger o sistema
+                \item Permite recuperação automática
+            \end{itemize}
+            
+            \vspace{0.8em}
+            \textbf{Máquina de Estados:}
+            \begin{enumerate}
+                \item \textcolor{successgreen}{\textbf{FECHADO:}} Operação normal
+                \item \textcolor{failred}{\textbf{ABERTO:}} Fail-fast + Fallback
+                \item \textcolor{fallbackorange}{\textbf{SEMIABERTO:}} Período de teste
+            \end{enumerate}
+        \end{column}
+        \begin{column}{0.42\textwidth}
+            \begin{block}{Configuração Utilizada}
+                \footnotesize
+                \begin{itemize}
+                    \item \texttt{failureRateThreshold:} 50\%
+                    \item \texttt{slidingWindowSize:} 10 req
+                    \item \texttt{waitDurationInOpenState:} 10s
+                    \item \texttt{permittedCallsInHalfOpen:} 3
+                \end{itemize}
+            \end{block}
+            
+            \vspace{0.5em}
+            \begin{exampleblock}{Degradação Graciosa}
+                HTTP 500 $\rightarrow$ HTTP 202\\[0.2em]
+                {\footnotesize ``Pagamento agendado para processamento posterior''}
+            \end{exampleblock}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==============================================================================
+% SEÇÃO 3: METODOLOGIA
+% ==============================================================================
+\section{Metodologia Experimental}
+
+\begin{frame}[shrink=5]{Metodologia: Abordagem Experimental}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \textbf{Stack Tecnológico}
+            \begin{itemize}
+                \item Java 17, Spring Boot 3
+                \item Resilience4j 2.1.0
+                \item Docker Compose
+                \item Grafana k6 (load testing)
+            \end{itemize}
+            
+            \vspace{0.8em}
+            \textbf{Versões Comparadas}
+            \begin{description}
+                \item[\textcolor{ufpegray}{\textbf{V1}}] Baseline (sem resiliência)
+                \item[\textcolor{cinred}{\textbf{V2}}] Circuit Breaker + Fallback
+                \item[\textcolor{neutralblue}{\textbf{V3}}] Retry com Backoff
+            \end{description}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{block}{5 Cenários de Teste}
+                \footnotesize
+                \begin{tabular}{ll}
+                    \textbf{Normal} & 100\% saudável \\
+                    \textbf{Catástrofe} & 100\% falha por 5min \\
+                    \textbf{Degradação} & 5\% $\rightarrow$ 50\% falhas \\
+                    \textbf{Rajadas} & 3 ondas de falha \\
+                    \textbf{Indisponibilidade} & 75\% offline \\
+                \end{tabular}
+            \end{block}
+            
+            \vspace{0.5em}
+            \begin{exampleblock}{Volume de Dados}
+                \centering
+                \textbf{+380.000 requisições}\\
+                analisadas estatisticamente
+            \end{exampleblock}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==============================================================================
+% SEÇÃO 4: RESULTADOS
+% ==============================================================================
+\section{Resultados}
+
+\begin{frame}[shrink=20]{Resultados Consolidados}
+    \begin{center}
+        \textbf{\large Comparação de Disponibilidade Percebida: V1 vs V2}
+    \end{center}
+    
+    \vspace{0.2em}
+    
+    \begin{table}
+        \centering
+        \small
+        \begin{tabular}{l >{\centering\arraybackslash}p{2.5cm} >{\centering\arraybackslash}p{2.5cm} >{\centering\arraybackslash}p{2cm}}
+            \toprule
+            \textbf{Cenário} & \textbf{V1 (Baseline)} & \textbf{V2 (CB)} & \textbf{Ganho} \\
+            \midrule
+            Catástrofe & 35,7\% & \textcolor{successgreen}{\textbf{95,1\%}} & +59,3pp \\
+            Degradação & 75,4\% & \textcolor{successgreen}{\textbf{95,4\%}} & +20,0pp \\
+            \rowcolor{cinred!10} Indisponibilidade & 10,5\% & \textcolor{successgreen}{\textbf{99,6\%}} & \textbf{+89,1pp} \\
+            Rajadas & 63,0\% & \textcolor{successgreen}{\textbf{96,7\%}} & +33,6pp \\
+            Normal & 100,0\% & 100,0\% & 0pp \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
+    
+    \vspace{0.3em}
+    
+    \begin{alertblock}{Resultado Principal}
+        \centering
+        No cenário de \textbf{Indisponibilidade Extrema}, o Circuit Breaker transformou um sistema com \textbf{10,5\%} de disponibilidade em um com \textbf{99,6\%} — uma \textbf{melhoria de 9,5x}!
+    \end{alertblock}
+\end{frame}
+
+\begin{frame}{Visualização dos Resultados}
+    \vspace{-0.5em}
+    \begin{center}
+        \includegraphics[width=0.92\textwidth,height=0.82\textheight,keepaspectratio]{01_success_rates_comparison.png}
+    \end{center}
+\end{frame}
+
+\begin{frame}[shrink=20]{Impacto do Fallback}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \textbf{Transformação de Erros}
+            \begin{itemize}
+                \item V1: HTTP 500 (erro fatal)
+                \item V2: HTTP 202 (fallback)
+            \end{itemize}
+            
+            \vspace{0.3em}
+            \textbf{Contribuição do Fallback:}
+            \begin{itemize}
+                \item Catástrofe: 62,1\%
+                \item Rajadas: 34,6\%
+                \item Indisponibilidade: \textbf{99,1\%}
+            \end{itemize}
+            
+            \vspace{0.3em}
+            \begin{exampleblock}{Redução de Downtime}
+                Catástrofe: 8,37min $\rightarrow$ 0,64min\\
+                \textbf{Redução de 92\%}
+            \end{exampleblock}
+        \end{column}
+        \begin{column}{0.50\textwidth}
+            \includegraphics[width=\textwidth]{08_fallback_contribution.png}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Análise Consolidada: Rajadas e Catástrofe}
+    \vspace*{-1.5em}
+    \begin{center}
+        \makebox[\textwidth]{\includegraphics[width=1.08\textwidth,height=0.90\textheight,keepaspectratio]{05_combined_summary.png}}
+    \end{center}
+\end{frame}
+
+% ==============================================================================
+% SEÇÃO 5: ANÁLISE ESTATÍSTICA
+% ==============================================================================
+\section{Análise Estatística}
+
+\begin{frame}[shrink=20]{Validação Estatística}
+    \begin{columns}[T]
+        \begin{column}{0.50\textwidth}
+            \begin{table}
+                \centering
+                \small
+                \begin{tabular}{lr}
+                    \toprule
+                    \textbf{Métrica} & \textbf{Valor} \\
+                    \midrule
+                    Teste t (p-value) & p $<$ 0,0001 \\
+                    \rowcolor{cinred!15} \textbf{Cohen's d} & \textbf{1,078} \\
+                    \midrule
+                    ANOVA (F) & 546,79 \\
+                    Eta-quadrado ($\eta^2$) & 0,267 \\
+                    \midrule
+                    IC 95\% (V1) & [495; 508] ms \\
+                    IC 95\% (V2) & [400; 410] ms \\
+                    \bottomrule
+                \end{tabular}
+            \end{table}
+            
+            \vspace{0.2em}
+            \begin{alertblock}{Interpretação}
+                Cohen's d = 1,078\\
+                = Efeito \textbf{GRANDE}\\
+                {\small (limiar: d $>$ 0,8)}
+            \end{alertblock}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \includegraphics[width=\textwidth]{heatmap_success_rate.png}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==============================================================================
+% SEÇÃO 6: ANÁLISE V3 (RETRY)
+% ==============================================================================
+\section{Análise do Padrão Retry (V3)}
+
+\begin{frame}[shrink=20]{Por que Retry (V3) não é Suficiente?}
+    \begin{columns}[T]
+        \begin{column}{0.50\textwidth}
+            \begin{table}
+                \centering
+                \small
+                \begin{tabular}{lrrr}
+                    \toprule
+                    \textbf{Cenário} & \textbf{V1} & \textbf{V3} & \textbf{V2} \\
+                    \midrule
+                    Indisp. & 10,5\% & 15,7\% & \textcolor{successgreen}{\textbf{99,6\%}} \\
+                    Catástrofe & 35,7\% & 52,8\% & \textcolor{successgreen}{\textbf{95,1\%}} \\
+                    Rajadas & 63,0\% & 77,7\% & \textcolor{successgreen}{\textbf{96,7\%}} \\
+                    \bottomrule
+                \end{tabular}
+            \end{table}
+            
+            \vspace{0.3em}
+            \begin{alertblock}{Problemas do Retry}
+                \begin{enumerate}
+                    \item Não melhora em falhas persistentes
+                    \item Aumenta latência
+                    \item Pode amplificar carga (3x)
+                \end{enumerate}
+            \end{alertblock}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{exampleblock}{Recomendação}
+                \textbf{Retry} deve ser usado \textbf{dentro} do Circuit Breaker, não como substituto.
+                
+                \vspace{0.3em}
+                {\small CB fechado $\rightarrow$ retry permitido\\
+                CB aberto $\rightarrow$ fallback imediato}
+            \end{exampleblock}
+            
+            \vspace{0.3em}
+            \includegraphics[width=\textwidth]{error_rates.png}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==============================================================================
+% SEÇÃO 7: CONCLUSÕES
+% ==============================================================================
+\section{Conclusões}
+
+\begin{frame}[shrink=5]{Contribuições do Trabalho}
+    \begin{enumerate}
+        \item \textbf{Evidência Empírica Robusta}\\
+              {\small Dados quantitativos de 5 cenários realistas (+380.000 requisições)}
+              
+        \vspace{0.5em}
+        \item \textbf{Comparação entre Padrões}\\
+              {\small CB (V2) vs Retry isolado (V3) — demonstrou superioridade do CB}
+              
+        \vspace{0.5em}
+        \item \textbf{Análise Estatística Rigorosa}\\
+              {\small Cohen's d = 1,078 (efeito grande), ANOVA significativa}
+              
+        \vspace{0.5em}
+        \item \textbf{Metodologia Reprodutível}\\
+              {\small Framework Docker + k6 disponível para replicação}
+              
+        \vspace{0.5em}
+        \item \textbf{Quantificação de Benefícios}\\
+              {\small Até \textbf{+89pp} na disponibilidade, \textbf{-99,5\%} nas falhas}
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}[shrink=5]{Limitações e Trabalhos Futuros}
+    \begin{columns}[T]
+        \begin{column}{0.48\textwidth}
+            \begin{alertblock}{Limitações}
+                \begin{itemize}
+                    \item POC simplificada
+                    \item Ambiente local
+                    \item Configuração fixa do CB
+                    \item Carga sintética (k6)
+                \end{itemize}
+            \end{alertblock}
+        \end{column}
+        \begin{column}{0.48\textwidth}
+            \begin{exampleblock}{Trabalhos Futuros}
+                \begin{itemize}
+                    \item Combinação CB + Retry
+                    \item Ambiente cloud distribuído
+                    \item Múltiplas dependências
+                    \item CB adaptativos com ML
+                    \item Service Meshes (Istio)
+                \end{itemize}
+            \end{exampleblock}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\begin{frame}[shrink=5]{Conclusão}
+    \begin{center}
+        \Large
+        \textit{``O Circuit Breaker transformou um sistema\\
+        inutilizável (10,5\%) em um altamente disponível (99,6\%).\\[0.3em]
+        Isso representa uma \textbf{melhoria de 9,5x}.''}
+    \end{center}
+    
+    \vspace{1.5em}
+    
+    \begin{columns}[c]
+        \begin{column}{0.32\textwidth}
+            \centering
+            \textcolor{successgreen}{\Large\textbf{CB é essencial}}\\[0.3em]
+            {\small para microsserviços\\síncronos críticos}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \centering
+            \textcolor{failred}{\Large\textbf{Retry sozinho}}\\[0.3em]
+            {\small não é suficiente para\\falhas persistentes}
+        \end{column}
+        \begin{column}{0.32\textwidth}
+            \centering
+            \textcolor{fallbackorange}{\Large\textbf{Fallback}}\\[0.3em]
+            {\small preserva a experiência\\do usuário}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+% ==============================================================================
+% SLIDE FINAL
+% ==============================================================================
+{
+\setbeamertemplate{footline}{} % Remove rodapé
+\begin{frame}
+    \begin{center}
+        \vspace{1em}
+        
+        {\Huge\textcolor{cinred}{\textbf{Obrigado!}}}
+        
+        \vspace{2em}
+        
+        {\Large\textcolor{ufpegray}{Perguntas?}}
+        
+        \vspace{2em}
+        
+        \includegraphics[height=1.2cm]{logo_cin_ufpe.png}
+        
+        \vspace{1.5em}
+        
+        \textbf{Humberto Laff}\\
+        {\small hlaff@cin.ufpe.br}\\[0.5em]
+        {\footnotesize Centro de Informática (CIn) — UFPE}
+    \end{center}
+\end{frame}
+}
+
+\end{document}

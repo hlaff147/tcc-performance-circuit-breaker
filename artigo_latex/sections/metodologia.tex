@@ -16,7 +16,7 @@ Figure~\ref{fig:architecture} summarizes the simplified architecture used throug
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.48\textwidth]{arquitetura_simplificada.png}
+\includegraphics[width=0.48\textwidth]{simplified_architecture_en.png}
 \caption{Simplified architecture of the experimental microservices ecosystem.}
 \label{fig:architecture}
 \end{figure}
@@ -30,13 +30,34 @@ Three versions of payment-service were developed:
 
 \subsection{Circuit Breaker Configuration (V2)}
 
+The Resilience4j Circuit Breaker was configured to provide a balance between fail-fast responsiveness and stability.
+
 \begin{itemize}
-    \item \textbf{failureRateThreshold}: 50\%
-    \item \textbf{slowCallRateThreshold}: 70\%
-    \item \textbf{slidingWindowSize}: 10 requests
-    \item \textbf{waitDurationInOpenState}: 10s
-    \item \textbf{permittedNumberOfCallsInHalfOpenState}: 3
+    \item \textbf{failureRateThreshold}: 50\% --- Chosen as a balanced threshold; lower values can cause unnecessary openings (flapping), while higher values delay protection;
+    \item \textbf{slowCallRateThreshold}: 70\% --- Focuses on protecting threads from slow dependencies;
+    \item \textbf{slidingWindowSize}: 10 requests --- Provides enough history to detect patterns without excessive memory overhead;
+    \item \textbf{waitDurationInOpenState}: 10s --- Ensures enough time for the downstream dependency to recover;
+    \item \textbf{permittedNumberOfCallsInHalfOpenState}: 3 --- A conservative probe to verify health before closing the circuit.
 \end{itemize}
+
+\subsection{State Transition Workflow}
+
+The Circuit Breaker transitions through three primary states: \textbf{Closed} (all traffic flows), \textbf{Open} (traffic blocked/fallback), and \textbf{Half-Open} (controlled probing). Figure~\ref{fig:cb-workflow} illustrates this logic.
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}{0.45\textwidth}
+\raggedright
+\small
+\textbf{1. Closed} $\rightarrow$ \textbf{Open}: Triggered when $failureRate > 50\%$ in a 10-req window. \\
+\textbf{2. Open} $\rightarrow$ \textbf{Half-Open}: Automatic after 10s wait duration. \\
+\textbf{3. Half-Open}: Probes with 3 requests. \\
+\textbf{4. Half-Open} $\rightarrow$ \textbf{Closed}: If all 3 probes succeed. \\
+\textbf{5. Half-Open} $\rightarrow$ \textbf{Open}: If any probe fails.
+\end{minipage}
+\caption{Circuit Breaker State Machine Workflow Logic.}
+\label{fig:cb-workflow}
+\end{figure}
 
 \subsection{Test Scenarios}
 
