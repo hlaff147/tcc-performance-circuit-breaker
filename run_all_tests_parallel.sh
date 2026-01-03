@@ -43,6 +43,7 @@ get_container_for_version() {
     v1) echo "servico-pagamento-v1" ;;
     v2) echo "servico-pagamento-v2" ;;
     v3) echo "servico-pagamento-v3" ;;
+    v4) echo "servico-pagamento-v4" ;;
   esac
 }
 
@@ -51,6 +52,7 @@ get_port_for_version() {
     v1) echo "8080" ;;
     v2) echo "8082" ;;
     v3) echo "8083" ;;
+    v4) echo "8084" ;;
   esac
 }
 
@@ -193,6 +195,10 @@ main() {
     run_k6_for_version "v3" &
     PIDS+=($!)
   fi
+
+  # Inicia V4 (sempre ativo)
+  run_k6_for_version "v4" &
+  PIDS+=($!)
   
   # Aguarda todos os processos terminarem
   echo "Aguardando conclusão de todos os testes..."

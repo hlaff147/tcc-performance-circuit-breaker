@@ -123,6 +123,36 @@ services:
     networks:
       - tcc-network
 
+  # V4 - Composição (Retry + Circuit Breaker)
+  servico-pagamento-v4:
+    build:
+      context: ./services/payment-service-v4
+      dockerfile: Dockerfile
+    container_name: servico-pagamento-v4
+    ports:
+      - "8084:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=v4-composicao
+    depends_on:
+      servico-adquirente:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - tcc-network
+
   # --- 2. ECOSSISTEMA DE TESTE E MONITORAMENTO ---
 
   k6-tester:

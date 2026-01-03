@@ -21,24 +21,29 @@ Figure~\ref{fig:architecture} summarizes the simplified architecture used throug
 \label{fig:architecture}
 \end{figure}
 
-Three versions of payment-service were developed:
+Four versions of payment-service were developed:
 \begin{itemize}
     \item \textbf{V1 (Baseline)}: Basic timeouts only (2s);
     \item \textbf{V2 (Circuit Breaker)}: Resilience4j with CB and fallback returning HTTP 202;
-    \item \textbf{V3 (Retry)}: Exponential backoff retry (3 attempts, 500ms→1s→2s).
+    \item \textbf{V3 (Retry)}: Exponential backoff retry (3 attempts, 500ms→1s→2s);
+    \item \textbf{V4 (Composition)}: Combines V2 and V3, simulating a production-grade resilience stack.
 \end{itemize}
 
 \subsection{Circuit Breaker Configuration (V2)}
 
-The Resilience4j Circuit Breaker was configured to provide a balance between fail-fast responsiveness and stability.
+The Resilience4j Circuit Breaker was configured to provide a balance between fail-fast responsiveness and stability. Thresholds were selected based on the \textbf{criticality of the payment domain}.
 
 \begin{itemize}
-    \item \textbf{failureRateThreshold}: 50\% --- Chosen as a balanced threshold; lower values can cause unnecessary openings (flapping), while higher values delay protection;
-    \item \textbf{slowCallRateThreshold}: 70\% --- Focuses on protecting threads from slow dependencies;
-    \item \textbf{slidingWindowSize}: 10 requests --- Provides enough history to detect patterns without excessive memory overhead;
-    \item \textbf{waitDurationInOpenState}: 10s --- Ensures enough time for the downstream dependency to recover;
-    \item \textbf{permittedNumberOfCallsInHalfOpenState}: 3 --- A conservative probe to verify health before closing the circuit.
+    \item \textbf{failureRateThreshold}: 50\% --- Represents a conservative threshold where the system assumes the dependency is no longer reliable. Lower values (e.g., 20\%) might cause \textit{flapping} due to transient jitters;
+    \item \textbf{slowCallRateThreshold}: 70\% --- Prioritizes thread protection against slow dependencies, which are often more dangerous than total failures as they cause silent resource exhaustion;
+    \item \textbf{slidingWindowSize}: 20 requests --- Increased from 10 to provide a more robust statistical sample, reducing the impact of outliers;
+    \item \textbf{waitDurationInOpenState}: 15s --- Aligned with standard recovery times for cloud-native load balancers to detect healthy instances;
+    \item \textbf{permittedNumberOfCallsInHalfOpenState}: 5 --- Allows a small "probe" traffic to verify recovery without risking a full system impact.
 \end{itemize}
+
+\subsection{Fallback Definition and RFC 9110}
+
+The use of \textbf{HTTP 202 (Accepted)} as a fallback response is a deliberate architectural choice. According to \textbf{RFC 9110}, HTTP 202 indicates that the request has been accepted for processing, but the processing has not been completed. This aligns with a "scheduled payment" or "queue for later" pattern, maintaining semantic honesty while providing a graceful degradation path for the end user \cite{rfc9110}.
 
 \subsection{State Transition Workflow}
 

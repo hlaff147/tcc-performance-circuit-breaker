@@ -24,20 +24,24 @@ def calculate_amplification():
     
     for scenario in SCENARIOS:
         print(f"Analyzing Load Amplification for scenario: {scenario}")
-        data = loader.load_scenario(scenario, versions=["V1", "V3"])
+        data = loader.load_scenario(scenario, versions=["V1", "V3", "V4"])
         
         if "V1" in data and "V3" in data:
             v1_reqs = data["V1"][data["V1"]['metric'] == 'http_reqs']['value'].sum()
             v3_reqs = data["V3"][data["V3"]['metric'] == 'http_reqs']['value'].sum()
+            v4_reqs = data["V4"][data["V4"]['metric'] == 'http_reqs']['value'].sum() if "V4" in data else 0
             
-            amplification = v3_reqs / v1_reqs if v1_reqs > 0 else 0
+            amplification_v3 = v3_reqs / v1_reqs if v1_reqs > 0 else 0
+            amplification_v4 = v4_reqs / v1_reqs if v1_reqs > 0 and v4_reqs > 0 else 0
             
             results.append({
                 'Scenario': scenario,
-                'V1 Total Requests': v1_reqs,
-                'V3 Total Requests': v3_reqs,
-                'Amplification Factor': amplification,
-                'Additional Load (%)': (amplification - 1) * 100 if amplification > 0 else 0
+                'V1 Req': v1_reqs,
+                'V3 Req': v3_reqs,
+                'V4 Req': v4_reqs,
+                'V3 Factor': amplification_v3,
+                'V4 Factor': amplification_v4,
+                'CB Savings (%)': (1 - (v4_reqs / v3_reqs)) * 100 if v3_reqs > 0 and v4_reqs > 0 else 0
             })
         else:
             print(f"  Missing data for {scenario}")

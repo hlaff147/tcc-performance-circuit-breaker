@@ -52,6 +52,7 @@ COLORS = {
     'V2_conservador': '#2980b9',  # Azul
     'V2_agressivo': '#c0392b',    # Vermelho
     'V3': '#8e44ad',      # Roxo
+    'V4': '#e67e22',      # Laranja Cenoura (acadêmico)
 }
 
 VERSION_LABELS = {
@@ -60,6 +61,7 @@ VERSION_LABELS = {
     'V2_conservador': 'V2 CB (Conservador)',
     'V2_agressivo': 'V2 CB (Agressivo)',
     'V3': 'V3 (Retry)',
+    'V4': 'V4 (Retry + CB)',
 }
 
 

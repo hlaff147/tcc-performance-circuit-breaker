@@ -29,28 +29,28 @@ public class PaymentService {
     private static final String CIRCUIT_BREAKER_NAME = "adquirente-cb";
 
     private final AdquirenteClient acquirerClient;
-    private final Counter successCounter;
+    private final Counter directSuccessCounter;
     private final Counter fallbackCounter;
     private final Counter failureCounter;
 
     public PaymentService(AdquirenteClient acquirerClient, MeterRegistry meterRegistry) {
         this.acquirerClient = acquirerClient;
-        
+
         // Métricas customizadas para análise detalhada
-        this.successCounter = Counter.builder("payment.outcome")
-            .tag("result", "success")
-            .description("Pagamentos processados com sucesso")
-            .register(meterRegistry);
-            
+        this.directSuccessCounter = Counter.builder("payment.outcome")
+                .tag("result", "direct_success")
+                .description("Pagamentos processados com sucesso direto")
+                .register(meterRegistry);
+
         this.fallbackCounter = Counter.builder("payment.outcome")
-            .tag("result", "fallback")
-            .description("Pagamentos aceitos via fallback")
-            .register(meterRegistry);
-            
+                .tag("result", "fallback")
+                .description("Pagamentos aceitos via fallback")
+                .register(meterRegistry);
+
         this.failureCounter = Counter.builder("payment.outcome")
-            .tag("result", "failure")
-            .description("Pagamentos que falharam")
-            .register(meterRegistry);
+                .tag("result", "failure")
+                .description("Pagamentos que falharam")
+                .register(meterRegistry);
     }
 
     /**
@@ -61,7 +61,7 @@ public class PaymentService {
      * - OPEN: Bloqueia chamadas e aciona fallback imediatamente
      * - HALF_OPEN: Permite chamadas de teste para verificar recuperação
      *
-     * @param modo Modo de operação (normal, latencia, falha)
+     * @param modo    Modo de operação (normal, latencia, falha)
      * @param request Dados do pagamento
      * @return PaymentResponse com o resultado do processamento
      */
@@ -69,25 +69,26 @@ public class PaymentService {
     @Timed(value = "payment.processing.time", description = "Tempo de processamento de pagamento")
     public PaymentResponse processPayment(String modo, PaymentRequest request) {
         log.info("Processando pagamento [v2] - modo: {}, cliente: {}", modo, request.customerId());
-        
+
         long startTime = System.currentTimeMillis();
-        
+
         try {
             ResponseEntity<String> response = acquirerClient.autorizarPagamento(modo, request.toMap());
             long duration = System.currentTimeMillis() - startTime;
-            
-            // Mapeamento de status: 503 do adquirente -> falha interna para contabilizar no CB
+
+            // Mapeamento de status: 503 do adquirente -> falha interna para contabilizar no
+            // CB
             if (response.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
                 log.warn("Adquirente retornou 503. Mapeando para falha. Duração: {}ms", duration);
                 failureCounter.increment();
                 throw new RuntimeException("Serviço adquirente indisponível: " + response.getBody());
             }
-            
-            log.info("Pagamento processado com sucesso. Status: {}, Duração: {}ms", 
+
+            log.info("Pagamento processado com sucesso. Status: {}, Duração: {}ms",
                     response.getStatusCode(), duration);
-            successCounter.increment();
+            directSuccessCounter.increment();
             return PaymentResponse.success(response.getBody());
-            
+
         } catch (Exception e) {
             long duration = System.currentTimeMillis() - startTime;
             log.error("Erro ao processar pagamento. Duração: {}ms, Erro: {}", duration, e.getMessage());
@@ -104,8 +105,8 @@ public class PaymentService {
      * Implementa degradação graciosa retornando HTTP 202 (Accepted),
      * indicando que o pagamento será processado posteriormente.
      *
-     * @param modo Modo de operação original
-     * @param request Dados do pagamento
+     * @param modo      Modo de operação original
+     * @param request   Dados do pagamento
      * @param throwable Exceção que causou o fallback
      * @return PaymentResponse com status de fallback
      */
@@ -119,7 +120,7 @@ public class PaymentService {
         // Fora do cenário de circuito OPEN, não degradar para 202: propagar erro (5xx)
         // para refletir falhas reais antes da abertura do circuito.
         failureCounter.increment();
-        log.warn("Falha propagada (sem fallback): {} - Cliente: {}", 
+        log.warn("Falha propagada (sem fallback): {} - Cliente: {}",
                 throwable.getClass().getSimpleName(), request.customerId());
 
         if (throwable instanceof RuntimeException runtimeException) {

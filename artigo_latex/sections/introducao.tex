@@ -15,7 +15,9 @@ This problem is transversal across software engineering domains: e-commerce, log
 
 \subsection{Proposed Solution}
 
-The Circuit Breaker (CB) pattern emerges as a response to these challenges. Operating as a state machine with three modes—\textbf{Closed}, \textbf{Open}, and \textbf{Half-Open}—the CB monitors calls to dependent services and interrupts new attempts when failure rates exceed configured thresholds, failing fast and protecting the consumer from resource exhaustion \cite{fowler2014cb}.
+The Circuit Breaker (CB) pattern emerges as a response to these challenges. To understand its operation, a useful analogy is the \textbf{household electrical fuse box}. Just as a fuse "trips" and cuts off electricity when it detects a dangerous power surge—preventing a fire—the Circuit Breaker in software "trips" when it detects a "failure surge", cutting off requests to a failing service to prevent a system-wide collapse.
+
+Operating as a state machine with three modes—\textbf{Closed}, \textbf{Open}, and \textbf{Half-Open}—the CB monitors calls to dependent services and interrupts new attempts when failure rates exceed configured thresholds. This provides a \textbf{"Fail-Fast"} mechanism: instead of making users wait for long timeouts that will eventually fail anyway (like waiting in a line at a store that is clearly closed), the system immediately returns a response, protecting resources and improving the perceived user experience \cite{fowler2014cb}.
 
 \subsection{Contribution}
 
@@ -25,6 +27,6 @@ This paper fills this gap by:
 \begin{enumerate}
     \item \textbf{Implementing} a Proof of Concept (POC) simulating a microservices ecosystem with synchronous dependency, instrumented with Resilience4j;
     \item \textbf{Executing} benchmark campaigns with Docker and k6 to \textbf{empirically measure} throughput, latency (p95), and error rates across controlled scenarios;
-    \item \textbf{Comparing} three architectural versions: Baseline (V1), Circuit Breaker (V2), and Retry with exponential backoff (V3);
+    \item \textbf{Comparing} four architectural strategies: Baseline (V1), Circuit Breaker (V2), Retry with exponential backoff (V3), and \textbf{Resilience Composition} (V4), which combines Retry and Circuit Breaker;
     \item \textbf{Providing} rigorous statistical analysis with effect size measures (Cohen's d = 1.078).
 \end{enumerate}

@@ -35,7 +35,7 @@ OUTPUT_DIR = "analysis_results/scenarios"
 PLOTS_DIR = os.path.join(OUTPUT_DIR, "plots")
 CSV_DIR = os.path.join(OUTPUT_DIR, "csv")
 
-PALETTE = {"V1": "#d62728", "V2": "#2ca02c", "V3": "#1f77b4"}
+PALETTE = {"V1": "#d62728", "V2": "#2ca02c", "V3": "#1f77b4", "V4": "#ff7f0e"}
 
 ESTIMATED_DURATIONS = {
     "catastrofe": 13 * 60,
@@ -73,13 +73,13 @@ class ScenarioAnalyzer:
                 results_dir=self.results_dir,
                 use_cache=True
             )
-            self.data = loader.load_scenario(self.scenario_name)
+            self.data = loader.load_scenario(self.scenario_name, versions=["V1", "V2", "V3", "V4"])
         else:
             self._load_data_legacy()
         
         # Carrega summaries
         self.summary = {}
-        for version in ["V1", "V2", "V3"]:
+        for version in ["V1", "V2", "V3", "V4"]:
             summary_path = os.path.join(self.results_dir, f"{self.scenario_name}_{version}_summary.json")
             if os.path.exists(summary_path):
                 with open(summary_path, 'r') as f:
@@ -96,7 +96,7 @@ class ScenarioAnalyzer:
     def _load_data_legacy(self):
         """Carregamento legado para fallback."""
         self.data = {}
-        for version in ["V1", "V2", "V3"]:
+        for version in ["V1", "V2", "V3", "V4"]:
             file_path = os.path.join(self.results_dir, f"{self.scenario_name}_{version}.json")
             
             if os.path.exists(file_path):

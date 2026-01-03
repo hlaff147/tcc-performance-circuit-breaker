@@ -19,10 +19,12 @@ plt.rcParams['font.size'] = 11
 COLORS = {
     'V1': '#d62728',  # Vermelho
     'V2': '#2ca02c',  # Verde
+    'V3': '#1f77b4',  # Azul
+    'V4': '#ff7f0e',  # Laranja
     'Success': '#2ca02c',
     'Failure': '#d62728',
-    'CB_Open': '#ff7f0e',
-    'Fallback': '#9467bd'
+    'CB_Open': '#f0f000', # Amarelo para CB Aberto
+    'Fallback': '#9467bd'  # Roxo para Fallback
 }
 
 # Diretórios

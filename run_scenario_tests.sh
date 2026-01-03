@@ -269,6 +269,27 @@ run_scenario() {
 
         echo -e "\n${GREEN}✅ V3 concluído${NC}\n"
     fi
+
+    # V4 - Composição (Retry + Circuit Breaker)
+    echo -e "${GREEN}🔄 Rodando V4 (composição - Retry + CB)...${NC}"
+
+    docker-compose stop servico-pagamento 2>/dev/null || true
+
+    PAYMENT_SERVICE_VERSION=v4 docker-compose build servico-pagamento
+    PAYMENT_SERVICE_VERSION=v4 docker-compose up -d --no-deps servico-pagamento
+    echo "Aguardando serviço V4 inicializar..."
+    wait_for_payment_service "V4"
+
+    docker-compose up -d --no-deps k6-tester
+    sleep 2
+
+    docker-compose exec -T k6-tester k6 run \
+        --out json="/scripts/results/scenarios/${scenario_name}_V4.json" \
+        --summary-export="/scripts/results/scenarios/${scenario_name}_V4_summary.json" \
+        -e PAYMENT_BASE_URL=http://servico-pagamento:8080 \
+        "/scripts/$script_file" || echo "⚠️  Threshold falhou mas dados foram coletados"
+
+    echo -e "\n${GREEN}✅ V4 concluído${NC}\n"
     
     echo -e "${GREEN}✨ Cenário $scenario_name finalizado!${NC}\n"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

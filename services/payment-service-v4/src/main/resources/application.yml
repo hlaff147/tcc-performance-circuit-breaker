@@ -1,0 +1,86 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: payment-service-v4
+  profiles:
+    active: ${CB_PROFILE:v4-composicao}
+
+---
+# v4-composicao: Retry (Exponential Backoff + Jitter) then Circuit Breaker
+spring:
+  config:
+    activate:
+      on-profile: v4-composicao
+
+resilience4j:
+  retry:
+    instances:
+      adquirente-retry:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        exponentialMaxWaitDuration: 4000ms
+        enableRandomizedWait: true
+        randomizedWaitFactor: 0.5
+        retryExceptions:
+          - feign.FeignException.ServiceUnavailable
+          - feign.FeignException.InternalServerError
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+          - java.io.IOException
+
+  circuitbreaker:
+    instances:
+      adquirente-cb:
+        failureRateThreshold: 50
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 5
+        slowCallDurationThreshold: 2500ms
+        slowCallRateThreshold: 80
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        
+  timelimiter:
+    instances:
+      adquirente-cb:
+        timeoutDuration: 3000ms
+        cancelRunningFuture: true
+
+---
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakers,retries,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+    circuitbreakers:
+      enabled: true
+    retries:
+      enabled: true
+  metrics:
+    tags:
+      application: payment-service-v4
+      version: v4
+      experiment: resilience-composition
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        resilience4j.circuitbreaker.calls: true
+        resilience4j.retry.calls: true
+        payment.processing.time: true
+      percentiles:
+        http.server.requests: 0.5, 0.9, 0.95, 0.99
+      slo:
+        http.server.requests: 100ms, 200ms, 500ms, 1s, 2s

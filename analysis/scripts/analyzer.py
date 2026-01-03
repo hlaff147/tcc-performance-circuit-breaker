@@ -29,7 +29,7 @@ LATEX_DIR = os.path.join(OUTPUT_DIR, "latex")
 MARKDOWN_DIR = os.path.join(OUTPUT_DIR, "markdown")
 
 # --- Cores e Estilos para Gráficos ---
-PALETTE = {"V1": "#d62728", "V2": "#2ca02c", "V3": "#1f77b4"}
+PALETTE = {"V1": "#d62728", "V2": "#2ca02c", "V3": "#1f77b4", "V4": "#ff7f0e"}
 sns.set_style("whitegrid")
 
 class K6Analyzer:
@@ -52,18 +52,15 @@ class K6Analyzer:
         os.makedirs(self.latex_dir, exist_ok=True)
         os.makedirs(self.markdown_dir, exist_ok=True)
 
-    def load_data(self, max_sample_size=500000):
+    def load_data(self, max_sample_size=500000, versions=None):
         """
         Carrega os dados dos arquivos de resultado do k6 (JSON) de forma eficiente.
         
-        Usa FastK6Loader para:
-        - Parsing JSON com orjson (3-10x mais rápido)
-        - Processamento paralelo com multiprocessing
-        - Cache Parquet para reutilização instantânea
-        
         Args:
             max_sample_size: Número máximo de pontos a carregar por versão (default: 500k)
+            versions: Lista de versões a carregar (default: V1, V2, V3, V4)
         """
+        versions = versions or ["V1", "V2", "V3", "V4"]
         import gc
         
         start_time = time.time()
@@ -78,11 +75,12 @@ class K6Analyzer:
                 use_cache=True
             )
             self.data = loader.load_all_versions(
-                max_sample_size=max_sample_size
+                max_sample_size=max_sample_size,
+                versions=versions
             )
         else:
             print("⚠️  Usando carregamento padrão (mais lento)")
-            self._load_data_legacy(max_sample_size)
+            self._load_data_legacy(max_sample_size, versions)
         
         elapsed = time.time() - start_time
         print(f"\n⏱️  Tempo de carregamento: {elapsed:.2f}s")
@@ -90,14 +88,15 @@ class K6Analyzer:
         
         gc.collect()
     
-    def _load_data_legacy(self, max_sample_size=500000):
+    def _load_data_legacy(self, max_sample_size=500000, versions=None):
         """
         Carregamento legado para fallback quando FastK6Loader não está disponível.
         """
+        versions = versions or ["V1", "V2", "V3", "V4"]
         import random
         
         print("Carregando dados dos resultados do k6 (modo legado)...")
-        for version in ["V1", "V2", "V3"]:
+        for version in versions:
             file_path = os.path.join(self.results_dir, f"{version}_Completo.json")
             if os.path.exists(file_path):
                 file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
@@ -293,7 +292,7 @@ class K6Analyzer:
         </head>
         <body>
             <div class="container">
-                <h1>Relatório de Análise de Performance: V1 vs V2</h1>
+                <h1>Relatório de Análise de Performance: V1, V2, V3 e V4</h1>
                 
                 <div class="section">
                     <h2>Resumo das Métricas</h2>
@@ -534,13 +533,13 @@ class K6Analyzer:
         self.stats_df.to_csv(os.path.join(self.csv_dir, "statistical_analysis.csv"), index=False)
         
         # Gera visualização das distribuições
-        self._plot_distributions(v1_times, v2_times)
+        self._plot_distributions(self.response_times)
         
         print(f"\n=== Resultados da Análise Estatística ===")
-        print(f"Mann-Whitney U: {statistic_mw:.2f}, p-valor: {p_value_mw:.2e}")
-        print(f"Cliff's Delta: {cliffs_delta:.4f} ({self._interpret_cliffs_delta(cliffs_delta)})")
-        print(f"IC 95% da diferença de médias: [{ci_low:.2f}, {ci_high:.2f}] ms")
-        print(f"Diferença estatisticamente significativa: {'Sim' if p_value_mw < 0.05 else 'Não'}")
+        print(f"Mann-Whitney U (V1 vs V2): {statistic_mw:.2f}, p-valor: {p_value_mw:.2e}")
+        print(f"Cliff's Delta (V1 vs V2): {cliffs_delta:.4f} ({self._interpret_cliffs_delta(cliffs_delta)})")
+        print(f"IC 95% da diferença de médias (V1 vs V2): [{ci_low:.2f}, {ci_high:.2f}] ms")
+        print(f"Diferença estatisticamente significativa (V1 vs V2): {'Sim' if p_value_mw < 0.05 else 'Não'}")
         
         return self.stats_df
 
@@ -597,16 +596,18 @@ class K6Analyzer:
         upper = np.percentile(diff_means, (1 - alpha / 2) * 100)
         return lower, upper
 
-    def _plot_distributions(self, v1_times, v2_times):
+    def _plot_distributions(self, times_dict):
         """
-        Gera visualizações das distribuições de tempo de resposta.
+        Gera visualizações das distribuições de tempo de resposta para todas as versões.
         """
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        versions = sorted(times_dict.keys())
         
         # Histograma comparativo
         ax1 = axes[0, 0]
-        ax1.hist(v1_times, bins=50, alpha=0.5, label='V1', color=PALETTE['V1'], density=True)
-        ax1.hist(v2_times, bins=50, alpha=0.5, label='V2', color=PALETTE['V2'], density=True)
+        for version in versions:
+            ax1.hist(times_dict[version], bins=50, alpha=0.5, label=version, 
+                    color=PALETTE.get(version, '#333'), density=True)
         ax1.set_xlabel('Tempo de Resposta (ms)')
         ax1.set_ylabel('Densidade')
         ax1.set_title('Distribuição de Tempos de Resposta')
@@ -614,34 +615,32 @@ class K6Analyzer:
         
         # Box plot
         ax2 = axes[0, 1]
-        data_bp = [v1_times, v2_times]
-        bp = ax2.boxplot(data_bp, labels=['V1', 'V2'], patch_artist=True)
-        bp['boxes'][0].set_facecolor(PALETTE['V1'])
-        bp['boxes'][1].set_facecolor(PALETTE['V2'])
-        for box in bp['boxes']:
-            box.set_alpha(0.7)
+        data_bp = [times_dict[v] for v in versions]
+        bp = ax2.boxplot(data_bp, labels=versions, patch_artist=True)
+        for i, version in enumerate(versions):
+            bp['boxes'][i].set_facecolor(PALETTE.get(version, '#333'))
+            bp['boxes'][i].set_alpha(0.7)
         ax2.set_ylabel('Tempo de Resposta (ms)')
         ax2.set_title('Box Plot Comparativo')
         
         # Violin plot
         ax3 = axes[1, 0]
-        parts = ax3.violinplot([v1_times, v2_times], positions=[1, 2], showmeans=True, showmedians=True)
-        for i, pc in enumerate(parts['bodies']):
-            pc.set_facecolor([PALETTE['V1'], PALETTE['V2']][i])
+        positions = np.arange(1, len(versions) + 1)
+        parts = ax3.violinplot(data_bp, positions=positions, showmeans=True, showmedians=True)
+        for i, (version, pc) in enumerate(zip(versions, parts['bodies'])):
+            pc.set_facecolor(PALETTE.get(version, '#333'))
             pc.set_alpha(0.7)
-        ax3.set_xticks([1, 2])
-        ax3.set_xticklabels(['V1', 'V2'])
+        ax3.set_xticks(positions)
+        ax3.set_xticklabels(versions)
         ax3.set_ylabel('Tempo de Resposta (ms)')
         ax3.set_title('Violin Plot - Distribuição Completa')
         
-        # ECDF (Empirical Cumulative Distribution Function)
+        # ECDF
         ax4 = axes[1, 1]
-        v1_sorted = np.sort(v1_times)
-        v2_sorted = np.sort(v2_times)
-        ax4.plot(v1_sorted, np.arange(1, len(v1_sorted)+1) / len(v1_sorted), 
-                label='V1', color=PALETTE['V1'], linewidth=2)
-        ax4.plot(v2_sorted, np.arange(1, len(v2_sorted)+1) / len(v2_sorted), 
-                label='V2', color=PALETTE['V2'], linewidth=2)
+        for version in versions:
+            sorted_times = np.sort(times_dict[version])
+            ax4.plot(sorted_times, np.arange(1, len(sorted_times)+1) / len(sorted_times), 
+                    label=version, color=PALETTE.get(version, '#333'), linewidth=2)
         ax4.set_xlabel('Tempo de Resposta (ms)')
         ax4.set_ylabel('Proporção Cumulativa')
         ax4.set_title('ECDF - Distribuição Cumulativa Empírica')

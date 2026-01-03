@@ -167,6 +167,9 @@ main() {
   if [ "${INCLUDE_V3}" = "true" ]; then
     versions+=(v3)
   fi
+  
+  # V4 é sempre incluído agora que foi implementado
+  versions+=(v4)
 
   for version in "${versions[@]}"; do
     run_k6_scenarios "${version}"

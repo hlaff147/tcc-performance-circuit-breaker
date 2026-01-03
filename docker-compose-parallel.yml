@@ -182,3 +182,61 @@ services:
           memory: 512M
     networks:
       - tcc-network
+
+  # ==========================================================================
+  # AMBIENTE V4 - Composição (Retry + Circuit Breaker)
+  # ==========================================================================
+
+  servico-adquirente-v4:
+    build:
+      context: ./services/acquirer-service
+      dockerfile: Dockerfile
+    container_name: servico-adquirente-v4
+    ports:
+      - "8094:8081"
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8081/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    networks:
+      - tcc-network
+
+  servico-pagamento-v4:
+    build:
+      context: ./services/payment-service-v4
+      dockerfile: Dockerfile
+    container_name: servico-pagamento-v4
+    ports:
+      - "8084:8080"
+    environment:
+      - ADQUIRENTE_CLIENT_URL=http://servico-adquirente-v4:8081
+      - SPRING_PROFILES_ACTIVE=v4-composicao
+    depends_on:
+      servico-adquirente-v4:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-sf", "http://localhost:8080/actuator/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - tcc-network

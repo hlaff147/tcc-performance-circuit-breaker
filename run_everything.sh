@@ -78,10 +78,10 @@ fi
 # 1) Cenário completo (V1/V2/V3) + análise baseline
 if [ "$SKIP_COMPLETE_SCENARIO" != "true" ]; then
   if [ "$PARALLEL_MODE" = "true" ]; then
-    echo "=== Executando cenário completo em PARALELO (V1, V2, V3) ==="
+    echo "=== Executando cenário completo em PARALELO (V1, V2, V3, V4) ==="
     bash ./run_all_tests_parallel.sh
   else
-    echo "=== Executando cenário completo SEQUENCIAL (V1 e V2) ==="
+    echo "=== Executando cenário completo SEQUENCIAL (V1, V2, V4) ==="
     bash ./run_all_tests.sh
   fi
 

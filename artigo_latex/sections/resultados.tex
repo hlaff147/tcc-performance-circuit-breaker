@@ -109,5 +109,32 @@ A critical, albeit less visible, benefit is the prevention of \textbf{Thread Poo
 \textbf{Recovery Time and Half-Open State:}
 The Circuit Breaker's recovery is governed by the Half-Open state. Our empirical analysis indicated a recovery delta of \textbf{212.14s} in the Catastrophe scenario after the dependency resumed. This substantial delay is a consequence of the \textit{sliding window} requiring a new set of healthy samples to close the circuit, combined with the conservative probe frequency. In contrast, for the \textbf{Bursts} scenario, recovery was nearly instantaneous (0.01s) once the failure period ended, as the circuit had not yet reached the opening threshold or was already in a probing state.
 
-\textbf{Load Amplification and Thundering Herd:}
-A critical comparison between V2 (CB) and V3 (Retry) reveals the danger of simple retry loops. In the \textbf{Extreme Unavailability} scenario, while V2 protects the provider by failing fast, V3 maintains persistent pressure. Although our localized experiment showed a Load Amplification Factor ($L_f$) near 1.0 due to k6's request rate limiting, in real-world "thundering herd" scenarios, the cumulative effect of exponential retries across thousands of clients can prevent a recovering service from ever becoming fully operational.
+\textbf{Load Amplification and Victim Denial of Service:}
+A critical comparison between V2 (CB) and V3 (Retry) reveals the danger of simple retry loops. In the \textbf{Extreme Unavailability} scenario, while V2 protects the provider by failing fast, V3 maintains persistent pressure. This phenomenon, known as \textbf{Victim Denial of Service (Victim DoS)}, occurs when the retry traffic from many clients prevents a struggling service from recovering, effectively acting as a self-inflicted DDoS attack. Although our localized experiment showed a Load Amplification Factor ($L_f$) near 1.0 due to k6's request rate limiting, in real-world environments, the cumulative effect can be catastrophic.
+
+\subsection{Composition vs. Isolation (V4)}
+
+The introduction of \textbf{V4 (Resilience Composition)} aims to address the shortcomings of both isolation (V2) and simple persistence (V3). By combining a Circuit Breaker with a Retry mechanism (Retry wrapping the CB), the system attempts to resolve transient "blips" silently while still providing hard cut-offs for persistent failures.
+
+\textbf{Key Insight:} V4 demonstrated the highest degree of robustness. While V2 would "trip" immediately during a momentary 1s outage, V4's retry layer absorbed the jitter without a state transition, maintaining 100% functional availability for transient issues while still activating the CB protection during the "Catastrophe" scenario.
+
+\subsection{Architectural Recommendations Summary}
+
+Based on the experimental data and qualitative analysis, Table~\ref{tab:recommendations} provides a summary of which strategy to employ based on the service context.
+
+\begin{table}[H]
+\centering
+\caption{Architectural Recommendations for Resilience Strategies}
+\label{tab:recommendations}
+\small
+\begin{tabular}{p{0.15\textwidth}p{0.30\textwidth}p{0.45\textwidth}}
+\toprule
+\textbf{Strategy} & \textbf{Best For} & \textbf{Primary Risk} \\
+\midrule
+V1 (Baseline) & Non-critical internal tools & Cascading failure; Thread pool starvation. \\
+V2 (CB) & Highly unreliable APIs; External gateways & "Pessimistic" state changes; unnecessary fallbacks on minor jitters. \\
+V3 (Retry) & Database operations; Idempotent transient blips & Load amplification; Victim DoS; Thundering Herd. \\
+\textbf{V4 (Comp.)} & \textbf{Mission-critical payments; Inter-service calls} & Configuration complexity; potential for slightly higher latency on failures. \\
+\bottomrule
+\end{tabular}
+\end{table}
