@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>Avaliação Quantitativa do Circuit Breaker - TCC Humberto Laff</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reset.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/white.min.css">
+
+    <style>
+        :root {
+            --cin-red: #CE3135;
+            --cin-red-dark: #A6272B;
+            --cin-gray: #404040;
+            --cin-light-gray: #F5F5F5;
+            --success: #2E8B57;
+            --fail: #B42828;
+            --warn: #E68C1E;
+        }
+
+        body { font-family: 'Lato', sans-serif; }
+
+        /* Header e Footer Institucionais */
+        .cin-header {
+            position: absolute; top: 0; left: 0; right: 0; height: 12px;
+            background: var(--cin-red); z-index: 10;
+        }
+        .footer-cin {
+            position: fixed; bottom: 15px; left: 20px; font-size: 14px;
+            color: var(--cin-gray); z-index: 10; font-weight: bold;
+        }
+        .reveal .slide-number {
+            color: var(--cin-red); bottom: 15px; right: 20px; font-size: 20px;
+        }
+
+        /* Tipografia */
+        .reveal h1, .reveal h2, .reveal h3 {
+            color: var(--cin-red); font-weight: bold; text-transform: none;
+        }
+        .reveal h3 { border-bottom: 2px solid #ddd; padding-bottom: 10px; font-size: 1.4em; margin-bottom: 20px; }
+        .reveal p, .reveal li { font-size: 0.85em; color: #333; line-height: 1.5; }
+        .reveal strong { color: var(--cin-red); }
+        .reveal .text-small { font-size: 0.6em; }
+        .reveal .text-muted { color: #666; }
+
+        /* Layouts Responsivos */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: center; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+        .grid-60-40 { display: grid; grid-template-columns: 60% 40%; gap: 20px; align-items: center; }
+        
+        /* Caixas de Destaque */
+        .box {
+            padding: 15px; background: var(--cin-light-gray);
+            border-left: 5px solid var(--cin-red); margin: 15px 0;
+            text-align: left; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+        }
+        .box.alert { border-color: var(--fail); background: rgba(180,40,40,0.05); }
+        .box.success { border-color: var(--success); background: rgba(46,139,87,0.05); }
+        .box.warn { border-color: var(--warn); background: rgba(230,140,30,0.05); }
+
+        /* Ajustes de Imagem e Responsividade */
+        .reveal img { 
+            border: none; 
+            box-shadow: none; 
+            max-width: 100%;
+            max-height: 70vh; 
+            object-fit: contain; 
+            margin: 10px auto;
+            display: block;
+        }
+        
+        /* Tabelas */
+        .reveal table { font-size: 0.6em; width: 100%; border-collapse: collapse; }
+        .reveal table th { background: var(--cin-red); color: white; padding: 8px; }
+        .reveal table td { border: 1px solid #ddd; padding: 8px; }
+
+        /* Fragmentos e Animações */
+        .reveal .fragment.fade-up { transition: all 0.5s ease; }
+
+        /* Ajuste para telas menores */
+        @media (max-height: 700px) {
+            .reveal p, .reveal li { font-size: 0.75em; }
+            .reveal h3 { font-size: 1.2em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="cin-header"></div>
+    <div class="footer-cin">Humberto Laff | CIn-UFPE</div>
+
+    <div class="reveal">
+        <div class="slides">
+
+            <!-- 1. Capa -->
+            <section data-background-color="#ffffff">
+                <div style="display: flex; justify-content: center; gap: 40px; margin-bottom: 30px;">
+                    <img src="ufpe-logo.png" style="height: 90px;" alt="UFPE">
+                    <img src="logo_cin.png" style="height: 90px;" alt="CIn">
+                </div>
+                <h2>Avaliação Quantitativa do Padrão Circuit Breaker em Microsserviços</h2>
+                <h4 class="text-muted">Um Estudo Empírico sobre Resiliência e Desempenho</h4>
+                
+                <div style="margin-top: 40px; font-size: 0.9em;">
+                    <p><strong>Autor:</strong> Humberto Laff</p>
+                    <p><strong>Orientador:</strong> Prof. Jamilson Ramalho Dantas</p>
+                    <p style="margin-top: 20px;" class="text-small text-muted">Janeiro 2026</p>
+                </div>
+            </section>
+
+            <!-- 2. Agenda -->
+            <section>
+                <h3>Roteiro da Apresentação</h3>
+                <div class="grid-2">
+                    <ul style="font-size: 1em; line-height: 2;">
+                        <li class="fragment">🔍 Introdução e Motivação</li>
+                        <li class="fragment">🛠️ Metodologia Experimental</li>
+                        <li class="fragment">📊 Resultados Quantitativos</li>
+                        <li class="fragment">💡 Discussão e UX</li>
+                        <li class="fragment">✅ Conclusão</li>
+                    </ul>
+                    <div class="box success fragment">
+                        <strong>Foco:</strong> Demonstrar como o Circuit Breaker transforma falhas catastróficas em degradação graciosa.
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. Contexto -->
+            <section>
+                <h3>Contexto: O Ecossistema de Microsserviços</h3>
+                <div class="grid-2">
+                    <div>
+                        <ul>
+                            <li>Comunicação Síncrona (REST/HTTP).</li>
+                            <li>Acoplamento Temporal forte.</li>
+                            <li><strong>Risco:</strong> Falhas em Cascata ("Efeito Dominó").</li>
+                        </ul>
+                        <div class="box alert">
+                            <strong>Impacto Financeiro:</strong><br>
+                            Setor Bancário: <span class="highlight">$5.6k - $9k / min</span> de downtime.<br>
+                            Big Techs: até <span class="highlight">$450k / hora</span>.
+                        </div>
+                    </div>
+                    <div class="r-stack">
+                        <img src="arch_tcc_mermaid_en.png" alt="Arquitetura">
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. O Problema -->
+            <section>
+                <h3>O Problema: Thread Pool Starvation</h3>
+                <div class="grid-60-40">
+                    <div>
+                        <p>Uma dependência lenta exaure os recursos do chamador.</p>
+                        <div class="box alert">
+                            <ol>
+                                <li>Serviço A chama B.</li>
+                                <li>B fica lento (ex: 10s).</li>
+                                <li>A espera o timeout (ex: 2s).</li>
+                                <li>Threads de A ficam presas.</li>
+                                <li><strong>Sistema A para de responder.</strong></li>
+                            </ol>
+                        </div>
+                    </div>
+                    <div class="box warn" style="font-size: 0.7em;">
+                        <strong>Consequência:</strong> Mesmo endpoints saudáveis falham por falta de threads livres para processar a requisição.
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. A Solução -->
+            <section>
+                <h3>A Solução: Circuit Breaker Pattern</h3>
+                <p>Isolamento de falhas inspirado em disjuntores elétricos.</p>
+                <div class="r-stretch">
+                    <img src="cb_state_transitions.png" alt="Estados do CB">
+                </div>
+                <div class="grid-3 text-small" style="margin-top: 10px;">
+                    <div class="box success"><strong>CLOSED:</strong> Fluxo normal. Monitora falhas.</div>
+                    <div class="box alert"><strong>OPEN:</strong> Bloqueio imediato. Ativa Fallback.</div>
+                    <div class="box warn"><strong>HALF-OPEN:</strong> Teste controlado de recuperação.</div>
+                </div>
+            </section>
+
+            <!-- 6. Metodologia -->
+            <section>
+                <h3>Metodologia: Design Experimental</h3>
+                <div class="grid-2">
+                    <div>
+                        <h4>4 Estratégias (Versões)</h4>
+                        <table>
+                            <thead>
+                                <tr><th>Versão</th><th>Estratégia</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td><strong>V1</strong></td><td>Baseline (Apenas Timeout 2s)</td></tr>
+                                <tr><td><strong>V2</strong></td><td>Circuit Breaker (Resilience4j)</td></tr>
+                                <tr><td><strong>V3</strong></td><td>Retry (Backoff Exponencial)</td></tr>
+                                <tr><td><strong>V4</strong></td><td><strong>Composição (Retry + CB)</strong></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <h4>Configuração CB (V2/V4)</h4>
+                        <ul class="text-small">
+                            <li><strong>Failure Threshold:</strong> 50%</li>
+                            <li><strong>Sliding Window:</strong> 20 reqs</li>
+                            <li><strong>Wait Duration:</strong> 15s</li>
+                            <li><strong>Half-Open Probes:</strong> 5 reqs</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 7. Cenários -->
+            <section>
+                <h3>Cenários de Teste (Grafana k6)</h3>
+                <p>Simulação de falhas realistas em ambiente isolado.</p>
+                <div class="r-stretch">
+                    <img src="test-cenarios-en.png" alt="Cenários">
+                </div>
+                <p class="text-small text-muted">Normal • Degradação Gradual • Bursts (Intermitente) • Catástrofe (100% erro) • Indisponibilidade Extrema</p>
+            </section>
+
+            <!-- 8. Resultados: Disponibilidade -->
+            <section>
+                <h3>Resultados: Disponibilidade Percebida</h3>
+                <div class="grid-60-40">
+                    <div class="r-stack">
+                        <img src="academic_bars_availability_en.png" alt="Barras Disponibilidade">
+                    </div>
+                    <div>
+                        <div class="box success">
+                            <h4 style="color: var(--success);">Ganho de +89.1 pp</h4>
+                            <p>No cenário de <em>Indisponibilidade Extrema</em>:</p>
+                            <ul>
+                                <li>V1: 10.3%</li>
+                                <li><strong>V4: 99.4%</strong></li>
+                            </ul>
+                        </div>
+                        <p class="text-small">Disponibilidade Percebida = (Sucesso + Fallback) / Total</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 9. Resultados: Heatmap -->
+            <section>
+                <h3>Taxa de Sucesso (Visão Geral)</h3>
+                <div class="r-stretch">
+                    <img src="academic_heatmap_success_en.png" alt="Heatmap">
+                </div>
+                <div class="box success text-small">
+                    V2 e V4 mantêm estabilidade (verde) mesmo sob falhas severas, enquanto V1 e V3 colapsam (vermelho).
+                </div>
+            </section>
+
+            <!-- 10. Resultados: Latência -->
+            <section>
+                <h3>Impacto na Latência e Fail-Fast</h3>
+                <div class="grid-2">
+                    <div>
+                        <div class="box">
+                            <h4>Performance Média</h4>
+                            <p>V1: 1281 ms (Bloqueio)</p>
+                            <p>V2: 437 ms (Fail-Fast)</p>
+                            <hr>
+                            <p><strong>Redução: ~843 ms</strong></p>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="box success">
+                            <h4>Validação Estatística</h4>
+                            <ul class="text-small">
+                                <li><strong>Mann-Whitney U:</strong> p < 0.0001</li>
+                                <li><strong>Cliff's Delta:</strong> 0.500 (Grande)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-small">O Circuit Breaker libera recursos imediatamente, evitando o "hang" do sistema.</p>
+            </section>
+
+            <!-- 11. Redução de Falhas -->
+            <section>
+                <h3>Redução Drástica de Erros 500</h3>
+                <div class="grid-60-40">
+                    <div class="r-stack">
+                        <img src="02_failure_reduction_en.png" alt="Redução de Falhas">
+                    </div>
+                    <div>
+                        <div class="box success">
+                            <h4>Até 99% de Redução</h4>
+                            <p>Transformação de erros fatais em respostas controladas.</p>
+                        </div>
+                        <p class="text-small">O Circuit Breaker intercepta a falha antes que ela atinja o usuário como um erro de servidor (500).</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 12. Fallback e RFC 9110 -->
+            <section>
+                <h3>Degradação Graciosa: O Papel do Fallback</h3>
+                <div class="grid-60-40">
+                    <div class="r-stack">
+                        <img src="08_fallback_contribution_en.png" alt="Fallback">
+                    </div>
+                    <div>
+                        <div class="box success">
+                            <h4>HTTP 202 (Accepted)</h4>
+                            <p>Escolha baseada na <strong>RFC 9110</strong>.</p>
+                            <p class="text-small">Indica que a requisição foi aceita para processamento futuro (Pagamento Agendado).</p>
+                        </div>
+                        <p class="text-small">Em cenários catastróficos, o Fallback respondeu por <strong>99.1%</strong> das respostas úteis.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 13. Estratégia V4 -->
+            <section>
+                <h3>V4: A Estratégia "Production-Grade"</h3>
+                <div class="grid-2">
+                    <div class="r-stack">
+                        <img src="v4-compositions-strategy.png" alt="V4 Strategy">
+                    </div>
+                    <div>
+                        <div class="box success">
+                            <strong>Composição:</strong>
+                            <p>Retry (Externo) + Circuit Breaker (Interno).</p>
+                        </div>
+                        <ul class="text-small">
+                            <li><strong>Retry:</strong> Absorve falhas transientes ("glitches").</li>
+                            <li><strong>CB:</strong> Protege contra falhas persistentes.</li>
+                            <li>Evita aberturas desnecessárias do circuito.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 14. UX Impact -->
+            <section>
+                <h3>Impacto na Experiência do Usuário (UX)</h3>
+                <div class="grid-2">
+                    <div class="box alert">
+                        <h4>Sem CB (V1)</h4>
+                        <ul class="text-small">
+                            <li>Loading infinito (Spinner).</li>
+                            <li>Espera de 2s a 5s.</li>
+                            <li>Erro 500 genérico.</li>
+                            <li><strong>Sensação:</strong> "O sistema caiu."</li>
+                        </ul>
+                    </div>
+                    <div class="box success">
+                        <h4>Com CB (V2/V4)</h4>
+                        <ul class="text-small">
+                            <li>Resposta imediata (< 50ms).</li>
+                            <li>Mensagem: "Pagamento agendado".</li>
+                            <li>Sistema continua responsivo.</li>
+                            <li><strong>Sensação:</strong> "Lentidão momentânea."</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 15. Conclusão -->
+            <section>
+                <h3>Conclusões e Recomendações</h3>
+                <div class="box success">
+                    <ul>
+                        <li>O Circuit Breaker é <strong>essencial</strong> para microsserviços síncronos.</li>
+                        <li>Transformou 10% de disponibilidade em 99%.</li>
+                        <li>Garante a sobrevivência do Thread Pool.</li>
+                    </ul>
+                </div>
+                <div class="box">
+                    <strong>Recomendação:</strong> Adotar a estratégia <strong>V4 (Composição)</strong> para sistemas críticos, unindo resiliência transiente e persistente.
+                </div>
+            </section>
+
+            <!-- 16. Obrigado -->
+            <section data-background-color="#ffffff">
+                <h1 style="color: var(--cin-red);">Obrigado!</h1>
+                <div style="margin-top: 50px;">
+                    <p><strong>Humberto Laff</strong></p>
+                    <p class="text-muted">hlaff@cin.ufpe.br</p>
+                    <br>
+                    <img src="logo_cin.png" style="height: 100px;" alt="CIn Logo">
+                </div>
+                <p class="text-small text-muted" style="margin-top: 40px;">Dúvidas?</p>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/notes/notes.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/zoom/zoom.min.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            slideNumber: 'c/t',
+            center: true,
+            transition: 'slide',
+            plugins: [ RevealNotes, RevealZoom ],
+            width: 1200,
+            height: 700,
+            margin: 0.1,
+            minScale: 0.2,
+            maxScale: 2.0
+        });
+    </script>
+</body>
+</html>

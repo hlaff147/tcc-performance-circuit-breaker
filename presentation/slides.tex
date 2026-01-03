@@ -1,0 +1,1040 @@
+% ==============================================================================
+% TCC Presentation - Circuit Breaker Pattern Quantitative Evaluation
+% Author: Humberto Laff
+% Institution: Centro de Informática (CIn) - UFPE
+% Date: January 2026
+% Language: English
+% ==============================================================================
+
+\documentclass[aspectratio=169,12pt]{beamer}
+
+% ==============================================================================
+% CIn-UFPE THEME
+% ==============================================================================
+
+% Base theme
+\usetheme{default}
+\useinnertheme{rounded}
+\useoutertheme{miniframes}
+
+% CIn-UFPE institutional colors
+\definecolor{cinred}{RGB}{206, 49, 53}
+\definecolor{cinredark}{RGB}{166, 39, 43}
+\definecolor{cinredlight}{RGB}{236, 89, 93}
+\definecolor{ufpegray}{RGB}{64, 64, 64}
+\definecolor{ufpelightgray}{RGB}{245, 245, 245}
+
+% Auxiliary colors for charts
+\definecolor{successgreen}{RGB}{46, 139, 87}
+\definecolor{failred}{RGB}{180, 40, 40}
+\definecolor{fallbackorange}{RGB}{230, 140, 30}
+\definecolor{neutralblue}{RGB}{70, 130, 180}
+
+% Apply colors to theme
+\setbeamercolor{palette primary}{bg=cinred,fg=white}
+\setbeamercolor{palette secondary}{bg=cinredark,fg=white}
+\setbeamercolor{palette tertiary}{bg=ufpegray,fg=white}
+\setbeamercolor{palette quaternary}{bg=cinred,fg=white}
+
+\setbeamercolor{structure}{fg=cinred}
+\setbeamercolor{frametitle}{bg=white,fg=cinred}
+\setbeamercolor{title}{fg=cinred}
+\setbeamercolor{subtitle}{fg=ufpegray}
+
+\setbeamercolor{block title}{bg=cinred,fg=white}
+\setbeamercolor{block body}{bg=ufpelightgray,fg=black}
+
+\setbeamercolor{block title alerted}{bg=failred,fg=white}
+\setbeamercolor{block body alerted}{bg=failred!10,fg=black}
+
+\setbeamercolor{block title example}{bg=successgreen,fg=white}
+\setbeamercolor{block body example}{bg=successgreen!10,fg=black}
+
+\setbeamercolor{item}{fg=cinred}
+
+% Fonts
+\setbeamerfont{title}{size=\Large,series=\bfseries}
+\setbeamerfont{subtitle}{size=\normalsize}
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamerfont{block title}{size=\normalsize,series=\bfseries}
+
+% ==============================================================================
+% LAYOUT CONFIGURATION
+% ==============================================================================
+
+% Remove default navigation
+\setbeamertemplate{navigation symbols}{}
+
+% Margins
+\setbeamersize{text margin left=0.5cm, text margin right=0.5cm}
+
+% Compact footer
+\setbeamertemplate{footline}{
+    \leavevmode%
+    \hbox{%
+        \begin{beamercolorbox}[wd=.33\paperwidth,ht=1.8ex,dp=0.3ex,center]{palette primary}%
+            \usebeamerfont{author in head/foot}\insertshortauthor
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.44\paperwidth,ht=1.8ex,dp=0.3ex,center]{palette secondary}%
+            \usebeamerfont{title in head/foot}\insertshorttitle
+        \end{beamercolorbox}%
+        \begin{beamercolorbox}[wd=.23\paperwidth,ht=1.8ex,dp=0.3ex,right]{palette tertiary}%
+            \usebeamerfont{date in head/foot}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+        \end{beamercolorbox}%
+    }%
+    \vskip0pt%
+}
+
+% Frame title
+\setbeamertemplate{frametitle}{
+    \vspace{0.5em}
+    \begin{minipage}[b]{0.8\textwidth}
+        {\usebeamerfont{frametitle}\insertframetitle}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.15\textwidth}
+        \raggedleft
+        \includegraphics[height=0.6cm]{logo_cin.png}
+    \end{minipage}
+    \vspace{0.1em}
+    \textcolor{cinred}{\rule{\textwidth}{1pt}}
+}
+
+% ==============================================================================
+% PACKAGE
+% ==============================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{hyperref}
+
+% Graphics path
+\graphicspath{{../artigo_latex/images/}{../slides/}{../tcc_latex/images/}}
+
+% ==============================================================================
+% DOCUMENT INFORMATION
+% ==============================================================================
+
+\title[Circuit Breaker in Microservices]{Quantitative Evaluation of the Circuit Breaker Pattern in Microservices}
+\subtitle{An Empirical Study on Resilience and Performance}
+\author[Humberto Laff]{Humberto Laff}
+\institute[CIn-UFPE]{
+    Centro de Informática (CIn)\\
+    Universidade Federal de Pernambuco (UFPE)\\[1em]
+    \textbf{Advisor:} Prof. Jamilson Ramalho Dantas
+}
+\date{January 2026}
+
+% Logo for title graphic
+\titlegraphic{
+    \includegraphics[height=1.2cm]{logo_cin_ufpe.png}
+}
+
+% ==============================================================================
+% BEGIN DOCUMENT
+% ==============================================================================
+
+\begin{document}
+
+% ==============================================================================
+% TITLE SLIDE
+% ==============================================================================
+
+{
+\setbeamertemplate{footline}{} % Remove footer from title slide
+\begin{frame}
+    \begin{center}
+        \vspace{-1em}
+        \begin{columns}[c]
+            \column{0.5\textwidth}
+            \centering
+            \includegraphics[height=1.2cm]{ufpe-logo.png}
+            \column{0.5\textwidth}
+            \centering
+            \includegraphics[height=1.2cm]{logo_cin.png}
+        \end{columns}
+        
+        \vspace{1.5em}
+        
+        {\usebeamerfont{title}\usebeamercolor[fg]{title}\inserttitle\par}
+        
+        \vspace{0.5em}
+        
+        {\usebeamerfont{subtitle}\usebeamercolor[fg]{subtitle}\insertsubtitle\par}
+        
+        \vspace{1.5em}
+        
+        {\usebeamerfont{author}\usebeamercolor[fg]{author}\insertauthor\par}
+        
+        \vspace{0.5em}
+        
+        {\footnotesize\usebeamercolor[fg]{institute}\insertinstitute\par}
+        
+        \vspace{1em}
+        
+        {\footnotesize\usebeamercolor[fg]{date}\insertdate\par}
+    \end{center}
+\end{frame}
+}
+
+% ==============================================================================
+% OUTLINE
+% ==============================================================================
+
+\begin{frame}{Outline}
+\tableofcontents
+\end{frame}
+
+% ==============================================================================
+% SECTION 1: INTRODUCTION
+% ==============================================================================
+
+\section{Introduction}
+
+\begin{frame}[shrink=25]{Context: Microservices Architecture}
+\begin{columns}[T]
+\column{0.60\textwidth}
+\textbf{Why Microservices?}
+\begin{itemize}
+    \item Independent development \& deployment
+    \item Selective scalability (scale only what's needed)
+    \item Technology diversity (polyglot persistence/languages)
+    \item Organizational autonomy (Two-Pizza Teams)
+    \item \textit{Mention: The shift from Monoliths to Distributed Systems}
+\end{itemize}
+
+\vspace{1em}
+
+\textbf{The Challenge:}
+\begin{itemize}
+    \item \alert{Synchronous communication} via REST/HTTP
+    \item Strong temporal coupling between services
+    \item Risk of cascading failures (The "Domino Effect")
+    \item \textit{Mention: How one slow service can block the entire chain}
+\end{itemize}
+
+\column{0.38\textwidth}
+\begin{block}{Key Statistics}
+\small
+\textbf{Downtime Cost:}\\
+Banking: \alert{\$5,600-\$9,000/min}\\[0.5em]
+Tech Giants: \alert{\$146k-\$450k/hour}
+\end{block}
+
+\vspace{0.5em}
+
+\begin{exampleblock}{Research Gap}
+\small
+Limited \textbf{quantitative} studies on Circuit Breaker \textit{actual} impact. Most are conceptual.
+\end{exampleblock}
+
+\end{columns}
+\end{frame}
+
+\begin{frame}[shrink=15]{The Problem: Cascading Failures}
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{Scenario:}
+\begin{enumerate}
+    \item Service A calls Service B (REST/HTTP)
+    \item Service B experiences latency/failure
+    \item Service A threads wait until timeout (2s-3s)
+    \item Thread pool becomes exhausted (Starvation)
+    \item \alert{Entire system collapses}
+\end{enumerate}
+
+\vspace{1em}
+
+\begin{alertblock}{Thread Pool Starvation}
+Blocked threads $\rightarrow$ No capacity for new requests $\rightarrow$ System-wide failure.
+\textit{Mention: Even healthy endpoints stop working!}
+\end{alertblock}
+
+\column{0.48\textwidth}
+\begin{figure}
+\centering
+\includegraphics[width=\textwidth]{arch_tcc_mermaid_en.png}
+\caption{Experimental architecture: payment-service depends on acquirer-service}
+\end{figure}
+\end{columns}
+\end{frame}
+
+\begin{frame}[shrink=15]{The Solution: Circuit Breaker Pattern}
+\begin{columns}[T]
+\column{0.55\textwidth}
+\textbf{Electrical Fuse Analogy:}
+\begin{itemize}
+    \item Detects ``failure surge'' (thresholds)
+    \item ``Trips'' to cut off traffic (Fail-Fast)
+    \item Prevents system-wide damage (Isolation)
+    \item Periodic recovery probes (Self-healing)
+\end{itemize}
+
+\vspace{1em}
+
+\textbf{Three States:}
+\begin{itemize}
+    \item \textcolor{successgreen}{\textbf{Closed}}: Normal operation (Traffic flows)
+    \item \textcolor{failred}{\textbf{Open}}: Fail-fast mode (Traffic blocked)
+    \item \textcolor{fallbackorange}{\textbf{Half-Open}}: Recovery probing (Testing)
+\end{itemize}
+
+\column{0.43\textwidth}
+\begin{block}{Key Benefits}
+\small
+\begin{itemize}
+    \item \textbf{Fail-Fast:} Immediate response ($<$1ms)
+    \item \textbf{Resource Protection:} Threads released
+    \item \textbf{Graceful Degradation:} Fallback mechanism
+    \item \textbf{Auto-Recovery:} Self-healing
+\end{itemize}
+\end{block}
+
+\vspace{0.5em}
+
+\begin{exampleblock}{Implementation}
+\small
+Resilience4j library (Java/Spring Boot)\\
+HTTP 202 (Accepted) fallback strategy
+\end{exampleblock}
+
+\end{columns}
+\end{frame}
+
+\begin{frame}[shrink=5]{Research Objectives}
+\begin{block}{Primary Question}
+\textbf{What is the \textit{quantitative} impact of the Circuit Breaker pattern on microservices resilience and performance?}
+\end{block}
+
+\vspace{1em}
+
+\textbf{Specific Goals:}
+\begin{enumerate}
+    \item Measure availability improvement across failure scenarios
+    \item Compare Circuit Breaker vs. Retry vs. Composition strategies
+    \item Quantify response time reduction
+    \item Provide statistical validation (effect size, significance)
+    \item Demonstrate resource protection benefits
+\end{enumerate}
+
+\vspace{1em}
+
+\begin{exampleblock}{Contribution}
+\small
+First comprehensive empirical study providing \textbf{robust quantitative evidence} of Circuit Breaker effectiveness in microservices
+\end{exampleblock}
+\end{frame}
+
+% ==============================================================================
+% SECTION 2: METHODOLOGY
+% ==============================================================================
+
+\section{Methodology}
+
+\begin{frame}[shrink=5]{Experimental Architecture}
+\begin{columns}[T]
+\column{0.55\textwidth}
+\textbf{Proof of Concept (POC):}
+\begin{itemize}
+    \item Two Spring Boot microservices
+    \item Docker containerization (Reproducibility)
+    \item Grafana k6 load testing (Realistic load)
+    \item Simplified (no DB/cache to isolate CB effect)
+\end{itemize}
+
+\vspace{1em}
+
+\textbf{Services:}
+\begin{itemize}
+    \item \textbf{payment-service}: Orchestrates payment flow
+    \item \textbf{acquirer-service}: Simulates payment gateway (configurable behavior: latency, 500 errors, etc.)
+\end{itemize}
+
+\column{0.43\textwidth}
+\begin{figure}
+\centering
+\includegraphics[width=0.95\textwidth]{arch_tcc_mermaid_en.png}
+\caption{System architecture with k6 load generator}
+\end{figure}
+\end{columns}
+
+\vspace{0.5em}
+
+\begin{block}{Isolation Strategy}
+\small
+Minimalistic POC to isolate Circuit Breaker as the \textbf{sole variable of interest}. \textit{Mention: Why we didn't use DB/Cache.}
+\end{block}
+\end{frame}
+
+\begin{frame}[shrink=20]{Four Service Versions}
+\begin{table}
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Version} & \textbf{Strategy} & \textbf{Description} \\
+\midrule
+\textbf{V1} & Baseline & Basic timeouts only (2s) \\
+\textbf{V2} & Circuit Breaker & Resilience4j + HTTP 202 fallback \\
+\textbf{V3} & Retry & Exponential backoff (3 attempts) \\
+\textbf{V4} & Composition & Retry + Circuit Breaker (Layered) \\
+\bottomrule
+\end{tabular}
+\caption{Architectural strategies compared}
+\end{table}
+
+\vspace{1em}
+
+\begin{columns}[T]
+\column{0.48\textwidth}
+\begin{block}{V2 Configuration}
+\small
+\begin{itemize}
+    \item Failure threshold: 50\%
+    \item Slow call threshold: 70\%
+    \item Sliding window: 20 requests
+    \item Open duration: 15s
+    \item \textit{Mention: Why these values were chosen.}
+\end{itemize}
+\end{block}
+
+\column{0.48\textwidth}
+\begin{exampleblock}{V4 Strategy}
+\small
+Retry layer wraps CB call\\
+$\rightarrow$ Absorbs transient jitters (blips)\\
+$\rightarrow$ CB protects against persistent failures
+\end{exampleblock}
+\end{columns}
+\end{frame}
+
+\begin{frame}[shrink=10]{Test Scenarios}
+\begin{table}
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Scenario} & \textbf{Duration} & \textbf{VUs} & \textbf{Failure Pattern} \\
+\midrule
+Normal & 10min & 100 & 100\% healthy \\
+Degradation & 13min & 100-200 & 5\%→50\% gradual \\
+Bursts & 13min & 100-200 & 3×(100\% for 1min) \\
+Catastrophe & 13min & 50-150 & 100\% failure for 5min \\
+Extreme Unavailability & 9min & 80-200 & 75\% offline \\
+\bottomrule
+\end{tabular}
+\caption{Five realistic failure scenarios}
+\end{table}
+
+\vspace{1em}
+
+\begin{block}{Metrics Collected}
+\small
+\begin{itemize}
+    \item \textbf{Perceived Availability:} (HTTP 200/201 + HTTP 202) / Total
+    \item \textbf{Response Time:} Average \& P95 latency
+    \item \textbf{Failure Rate:} HTTP 500 percentage
+    \item \textbf{Fallback Contribution:} HTTP 202 percentage
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}[shrink=15]{Key Concepts}
+\begin{columns}[T]
+\column{0.48\textwidth}
+\begin{block}{Perceived Availability}
+\small
+$$A_p = \frac{n_{200} + n_{201} + n_{202}}{n_{\text{total}}}$$
+
+Includes both \textit{successful} and \textit{gracefully degraded} responses
+\end{block}
+
+\vspace{0.5em}
+
+\begin{block}{Load Amplification}
+\small
+$$L_f = \frac{n_{\text{requests}}}{n_{\text{baseline}}}$$
+
+Measures retry pressure on downstream services
+\end{block}
+
+\column{0.48\textwidth}
+\begin{alertblock}{HTTP 202 Fallback}
+\small
+\textbf{RFC 9110:} ``Accepted''\\
+Request accepted for \textit{later} processing\\[0.5em]
+Maps to: ``Scheduled payment'' or ``Queue for retry''
+\end{alertblock}
+
+\vspace{0.5em}
+
+\begin{exampleblock}{Total Requests}
+\small
+\textbf{380,000+ requests} analyzed across all scenarios
+\end{exampleblock}
+\end{columns}
+\end{frame}
+
+% ==============================================================================
+% SECTION 3: RESULTS
+% ==============================================================================
+
+\section{Results}
+
+\begin{frame}{Availability Comparison: All Scenarios}
+\begin{figure}
+\centering
+\includegraphics[width=0.95\textwidth]{academic_bars_availability_en.png}
+\caption{Perceived Availability (\%) by version and scenario}
+\end{figure}
+\end{frame}
+
+\begin{frame}[shrink=15]{Key Results: Availability Gains}
+\begin{table}
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Scenario} & \textbf{V1} & \textbf{V2} & \textbf{V4} & \textbf{Gain} \\
+\midrule
+Normal & 100.0\% & 100.0\% & 100.0\% & --- \\
+Degradation & 94.2\% & 98.8\% & 98.9\% & +4.7pp \\
+Bursts & 62.9\% & 96.7\% & 96.6\% & \alert{+33.8pp} \\
+Catastrophe & 35.7\% & 95.1\% & 95.1\% & \alert{+59.4pp} \\
+Extreme Unavail. & 10.3\% & 99.1\% & 99.4\% & \alert{\textbf{+89.1pp}} \\
+\bottomrule
+\end{tabular}
+\caption{Perceived Availability: V1 vs V2/V4}
+\end{table}
+
+\vspace{1em}
+
+\begin{block}{Key Insight}
+Circuit Breaker transforms a \textbf{10.3\% available} system into a \textbf{99.4\% available} system during extreme failures!
+\textit{Mention: The 9.5x improvement in availability.}
+\end{block}
+\end{frame}
+
+\begin{frame}{Failure Reduction}
+\begin{figure}
+\centering
+\includegraphics[width=0.95\textwidth]{02_failure_reduction_en.png}
+\caption{Failure rates and reduction percentages across scenarios}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Success Rate Heatmap}
+\begin{figure}
+\centering
+\includegraphics[width=0.95\textwidth]{academic_heatmap_success_en.png}
+\caption{Success rate (\%) heatmap: Scenarios × Versions}
+\end{figure}
+\end{frame}
+
+\vspace{0.5em}
+
+\begin{block}{Cliff's Delta}
+\small
+$d = 0.500$ \\
+\alert{\textbf{Large effect size}}\\[0.5em]
+Substantial practical relevance. \textit{Mention: Why p-value alone isn't enough.}
+\end{block}
+
+\column{0.48\textwidth}
+\begin{block}{Response Time}
+\small
+\textbf{Mean (V1):} 1281.44 ms\\
+\textbf{Mean (V2):} 437.67 ms\\[0.5em]
+\alert{Reduction: 843.77 ms}\\[0.5em]
+95\% CI: [823.42, 863.95] ms
+\end{block}
+
+\vspace{0.5em}
+
+\begin{exampleblock}{Conclusion}
+\small
+Circuit Breaker provides \textbf{robust} latency reduction with high confidence.
+\end{exampleblock}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Circuit Breaker State Transitions}
+\begin{figure}
+\centering
+\includegraphics[width=0.95\textwidth]{cb_state_transitions.png}
+\caption{Latency profiles over time (V1-V4). Red shaded areas indicate CB OPEN state.}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Fallback Contribution}
+\begin{itemize}
+    \item In \textbf{Catastrophe}: 62.1\% of responses from fallback
+    \item In \textbf{Extreme Unavailability}: 99.1\% of responses from fallback
+    \item Fallback mechanism is \alert{essential} for resilience
+\end{itemize}
+\end{frame}
+
+\begin{frame}[shrink=20]{V3 (Retry) vs V2 (Circuit Breaker)}
+\begin{columns}[T]
+\column{0.48\textwidth}
+\begin{alertblock}{V3 Risks}
+\small
+\textbf{Load Amplification:}
+\begin{itemize}
+    \item 3× retry attempts
+    \item Persistent pressure on failing service
+    \item ``Victim DoS'' effect
+\end{itemize}
+
+\vspace{0.5em}
+
+\textbf{Inadequate for persistent failures.}
+\textit{Mention: Why retrying a dead service is bad.}
+\end{alertblock}
+
+\column{0.48\textwidth}
+\begin{exampleblock}{V2 Benefits}
+\small
+\textbf{Fail-Fast Protection:}
+\begin{itemize}
+    \item Immediate fallback
+    \item No retry pressure
+    \item Allows service recovery
+\end{itemize}
+
+\vspace{0.5em}
+
+\textbf{Effective for persistent failures.}
+\end{exampleblock}
+\end{columns}
+
+\vspace{1em}
+
+\begin{block}{V4 (Composition): Best of Both Worlds}
+\small
+Retry absorbs \textit{transient jitters} $\rightarrow$ CB protects against \textit{persistent failures}.
+\textit{Mention: This is the "Production-Grade" strategy.}
+\end{block}
+\end{frame}
+
+\begin{frame}{V4 Composition Strategy}
+\begin{figure}
+\centering
+\includegraphics[width=0.95\textwidth]{v4-compositions-strategy.png}
+\caption{V4 architecture: Retry layer wrapping Circuit Breaker}
+\end{figure}
+
+\vspace{0.5em}
+
+\textbf{Key Advantages:}
+\begin{itemize}
+    \item Absorbs momentary glitches without tripping circuit
+    \item Maintains hard cutoff for persistent failures
+    \item Achieved \alert{\textbf{99.4\%}} availability in Extreme Unavailability
+    \item \textit{Mention: Why this is the industry standard for critical APIs.}
+\end{itemize}
+\end{frame}
+
+% ==============================================================================
+% SECTION 4: DISCUSSION
+% ==============================================================================
+
+\section{Discussion}
+
+\begin{frame}{Graceful Degradation: Beyond Numbers}
+\begin{columns}[T]
+\column{0.55\textwidth}
+\textbf{User Experience Comparison:}
+
+\vspace{0.5em}
+
+\alert{\textbf{V1 (Baseline):}}
+\begin{itemize}
+    \item Wait 2-3 seconds
+    \item Receive HTTP 500 error
+    \item No feedback, no alternatives
+\end{itemize}
+
+\vspace{0.5em}
+
+\textcolor{successgreen}{\textbf{V2/V4 (Circuit Breaker):}}
+\begin{itemize}
+    \item Immediate response ($<$1ms)
+    \item HTTP 202: ``Payment scheduled''
+    \item Frontend can offer alternatives
+\end{itemize}
+
+\column{0.43\textwidth}
+\begin{block}{Psychological Impact}
+\small
+\textbf{Fail-Fast} is systematically superior to \textbf{Hang + Error}\\[0.5em]
+Users prefer \textit{immediate feedback} over long waits.
+\textit{Mention: The "Perceived Performance" concept.}
+\end{block}
+
+\vspace{0.5em}
+
+\begin{exampleblock}{Business Value}
+\small
+Maintains \textbf{operational continuity} during backend failures.
+\end{exampleblock}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Resource Protection: Thread Pool}
+\begin{columns}[T]
+\column{0.48\textwidth}
+\alert{\textbf{V1 Problem:}}
+\begin{enumerate}
+    \item Request to failing service
+    \item Thread blocks for 2s timeout
+    \item Under load: all threads blocked
+    \item \textbf{Thread pool exhaustion}
+    \item Entire service hangs
+\end{enumerate}
+
+\vspace{0.5em}
+
+\begin{alertblock}{Cascading Failure}
+\small
+Even healthy endpoints become unavailable!
+\textit{Mention: The "Blast Radius" of a failure.}
+\end{alertblock}
+
+\column{0.48\textwidth}
+\textcolor{successgreen}{\textbf{V2 Solution:}}
+\begin{enumerate}
+    \item Circuit detects failures
+    \item CB opens (fail-fast mode)
+    \item Threads released $<$1ms
+    \item Pool remains available
+    \item Service stays healthy
+\end{enumerate}
+
+\vspace{0.5em}
+
+\begin{exampleblock}{Protection}
+\small
+Service can still serve other operations independently.
+\textit{Mention: Bulkhead pattern relationship.}
+\end{exampleblock}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Architectural Recommendations}
+\begin{block}{Best Practice}
+\textbf{Combine patterns:} Wrap Retry \textit{inside} Circuit Breaker to prevent resource exhaustion while handling transient failures gracefully.
+\end{block}
+\end{frame}
+
+\begin{frame}{Recovery Time Analysis}
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{Catastrophe Scenario:}
+\begin{itemize}
+    \item Recovery delta: \alert{212.14s}
+    \item Sliding window requires new healthy samples
+    \item Conservative probe frequency
+\end{itemize}
+
+\vspace{0.5em}
+
+\textbf{Bursts Scenario:}
+\begin{itemize}
+    \item Recovery delta: \textcolor{successgreen}{0.01s}
+    \item Circuit not yet opened
+    \item Instant recovery
+\end{itemize}
+
+\column{0.48\textwidth}
+\begin{block}{Half-Open State}
+\small
+\textbf{Configuration:}
+\begin{itemize}
+    \item Wait duration: 15s
+    \item Probe calls: 5
+    \item All probes must succeed
+\end{itemize}
+
+\vspace{0.5em}
+
+Balances \textit{fail-fast} protection with \textit{recovery sensitivity}
+\end{block}
+\end{columns}
+
+\vspace{0.5em}
+
+\begin{alertblock}{Trade-off}
+\small
+Conservative recovery $\rightarrow$ Longer downtime but prevents flapping
+\end{alertblock}
+\end{frame}
+
+% ==============================================================================
+% SECTION 5: CONCLUSION
+% ==============================================================================
+
+\section{Conclusion}
+
+\begin{frame}{Summary of Contributions}
+\textbf{This work provides:}
+\begin{enumerate}
+    \item \textbf{Robust empirical evidence} of Circuit Breaker impact across 5 realistic scenarios
+    \item \textbf{Quantitative comparison:} CB vs Retry vs Composition
+    \item \textbf{Statistical validation:} Large effect size (Cliff's Delta = 0.500)
+\end{enumerate}
+
+\vspace{1em}
+
+\begin{block}{Key Finding}
+Circuit Breaker improved availability from \textbf{10.3\%} to \textbf{99.4\%} in extreme failures---a gain of \alert{\textbf{+89.1 percentage points}}
+\end{block}
+\end{frame}
+
+\begin{frame}[shrink=15]{Main Results Recap}
+\begin{columns}[T]
+\column{0.48\textwidth}
+\textbf{Availability:}
+\begin{itemize}
+    \item Up to \alert{+89.1pp} gain
+    \item Consistent across scenarios
+    \item V4 highest robustness
+\end{itemize}
+
+\vspace{0.5em}
+
+\textbf{Failure Reduction:}
+\begin{itemize}
+    \item Up to \alert{99.0\%} reduction
+    \item HTTP 500 $\rightarrow$ HTTP 202
+\end{itemize}
+
+\column{0.48\textwidth}
+\textbf{Response Time:}
+\begin{itemize}
+    \item \alert{843ms} average reduction
+    \item High confidence (p $<$ 0.0001)
+    \item Large effect size
+\end{itemize}
+
+\vspace{0.5em}
+
+\textbf{Resource Protection:}
+\begin{itemize}
+    \item Thread pool preserved
+    \item Fail-fast $<$1ms
+    \item No overhead in health
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}{Practical Recommendations}
+\begin{block}{1. Combine Patterns}
+Do not use Retry alone for persistent failures. Wrap it \textit{inside} a Circuit Breaker (V4 strategy).
+\end{block}
+
+\begin{block}{2. Meaningful Fallbacks}
+Use HTTP 202/204 to indicate acceptance for later processing, not generic 500 errors.
+\end{block}
+
+\begin{block}{3. Conservative Probing}
+Configure Half-Open state with small number of permitted calls to avoid overwhelming recovering dependency.
+\end{block}
+\end{frame}
+
+\begin{frame}{Limitations}
+\begin{itemize}
+    \item \textbf{Synthetic load:} Uniform k6 patterns, not real user behavior
+    \item \textbf{Single configuration:} Only one CB parameter set tested
+\end{itemize}
+
+\vspace{1em}
+
+\begin{alertblock}{External Validity}
+Results may vary in production environments with different characteristics, but the \textit{direction} of benefits should remain consistent.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Future Work}
+\textbf{Research Directions:}
+\begin{enumerate}
+    \item \textbf{Hybrid Strategies:} Combining CB, Retry, and Rate Limiting
+    \item \textbf{Parameter Sensitivity:} Analyzing impact of different threshold configurations
+    \item \textbf{Chaos Engineering:} Automated failure injection frameworks
+    \item \textbf{Service Mesh Comparison:} Istio/Linkerd vs library-level CB
+    \item \textbf{Asynchronous Architectures:} Kafka/RabbitMQ resilience patterns
+    \item \textbf{Adaptive Circuit Breaking:} ML-based dynamic threshold adjustment
+    \item \textbf{Multi-cloud Environments:} Geographic distribution impact
+\end{enumerate}
+\end{frame}
+
+\begin{frame}[shrink=5]{Final Message}
+\begin{center}
+\Large
+
+\textbf{The Circuit Breaker pattern is \alert{essential} for mission-critical synchronous microservices.}
+
+\vspace{1.5em}
+
+\normalsize
+Our empirical study provides \textbf{robust quantitative evidence} that Circuit Breaker:
+\begin{itemize}
+    \item Dramatically improves availability (+89pp)
+    \item Reduces failures by up to 99\%
+    \item Protects system resources
+    \item Enables graceful degradation
+\end{itemize}
+
+\vspace{1.5em}
+
+\textcolor{successgreen}{\textbf{Recommendation:}} Use V4 (Composition) strategy for production systems.
+
+\end{center}
+\end{frame}
+
+% ==============================================================================
+% Q&A
+% ==============================================================================
+
+\begin{frame}[plain]
+\begin{center}
+\Huge
+\textcolor{cinred}{\textbf{Thank You!}}
+
+\vspace{2em}
+
+\Large
+Questions?
+
+\vspace{3em}
+
+\normalsize
+\textbf{Humberto Laff}\\
+\texttt{hlaff@cin.ufpe.br}
+
+\vspace{1em}
+
+\textbf{Advisor:} Prof. Jamilson Ramalho Dantas\\
+\texttt{jrd@cin.ufpe.br}
+
+\vspace{2em}
+
+\small
+Centro de Informática (CIn)\\
+Universidade Federal de Pernambuco (UFPE)
+
+\end{center}
+\end{frame}
+
+% ==============================================================================
+% BACKUP SLIDES
+% ==============================================================================
+
+\appendix
+
+\begin{frame}[plain]
+\begin{center}
+\Huge
+\textcolor{cinred}{\textbf{Backup Slides}}
+\end{center}
+\end{frame}
+
+\begin{frame}{Detailed Configuration: Resilience4j}
+\begin{block}{Circuit Breaker Settings}
+\small
+\begin{itemize}
+    \item \texttt{failureRateThreshold}: 50\%
+    \item \texttt{slowCallRateThreshold}: 70\%
+    \item \texttt{slowCallDurationThreshold}: 1000ms
+    \item \texttt{slidingWindowSize}: 20 requests
+    \item \texttt{waitDurationInOpenState}: 15s
+    \item \texttt{permittedNumberOfCallsInHalfOpenState}: 5
+    \item \texttt{automaticTransitionFromOpenToHalfOpenEnabled}: true
+\end{itemize}
+\end{block}
+
+\begin{block}{Retry Settings (V3/V4)}
+\small
+\begin{itemize}
+    \item \texttt{maxAttempts}: 3
+    \item \texttt{waitDuration}: 500ms (exponential: 500ms $\rightarrow$ 1s $\rightarrow$ 2s)
+    \item \texttt{exponentialBackoffMultiplier}: 2
+\end{itemize}
+\end{block}
+\end{frame}
+
+\begin{frame}{Metric Correlation Matrix}
+\begin{figure}
+\centering
+\includegraphics[width=0.85\textwidth]{metric_correlation_heatmap.png}
+\caption{Correlation analysis between performance metrics}
+\end{figure}
+
+\begin{itemize}
+    \item Strong negative correlation: Fallback Rate $\leftrightarrow$ Failure Rate
+    \item Validates fallback mechanism effectiveness
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Docker Compose Architecture}
+\begin{block}{Services}
+\small
+\begin{itemize}
+    \item \textbf{payment-service-v1/v2/v3/v4}: Four versions running simultaneously
+    \item \textbf{acquirer-service}: Configurable failure simulator
+    \item \textbf{k6}: Load generator with custom scenarios
+    \item \textbf{prometheus}: Metrics collection
+    \item \textbf{grafana}: Real-time monitoring
+\end{itemize}
+\end{block}
+
+\begin{exampleblock}{Reproducibility}
+\small
+Complete setup available: \texttt{docker-compose up}\\
+All scripts automated: \texttt{./run\_all\_tests.sh}
+\end{exampleblock}
+\end{frame}
+
+% ==============================================================================
+% FINAL SLIDE
+% ==============================================================================
+
+{
+\setbeamertemplate{footline}{}
+\begin{frame}
+    \begin{center}
+        \vspace{2em}
+        {\Huge \textcolor{cinred}{\textbf{Thank You!}}}
+        
+        \vspace{2em}
+        
+        {\large \textbf{Humberto Laff}}
+        
+        \vspace{0.5em}
+        
+        \texttt{hlaff@cin.ufpe.br}
+        
+        \vspace{3em}
+        
+        \begin{columns}[c]
+            \column{0.5\textwidth}
+            \centering
+            \includegraphics[height=1.5cm]{ufpe-logo.png}
+            \column{0.5\textwidth}
+            \centering
+            \includegraphics[height=1.5cm]{logo_cin.png}
+        \end{columns}
+        
+        \vspace{1em}
+        {\footnotesize Centro de Informática (CIn) — UFPE}
+    \end{center}
+\end{frame}
+}
+
+\end{document}
