@@ -57,12 +57,53 @@ COLORS = {
 
 VERSION_LABELS = {
     'V1': 'V1 (Baseline)',
-    'V2_equilibrado': 'V2 CB (Equilibrado)',
-    'V2_conservador': 'V2 CB (Conservador)',
-    'V2_agressivo': 'V2 CB (Agressivo)',
+    'V2_equilibrado': 'V2 CB (Balanced)',
+    'V2_conservador': 'V2 CB (Conservative)',
+    'V2_agressivo': 'V2 CB (Aggressive)',
     'V3': 'V3 (Retry)',
     'V4': 'V4 (Retry + CB)',
 }
+
+# Bilingual labels
+LABELS = {
+    'en': {
+        'scenarios': {'catastrofe': 'Catastrophe', 'rajadas': 'Bursts', 'indisponibilidade': 'Unavailability', 'degradacao': 'Degradation', 'normal': 'Normal'},
+        'success_title': 'Success Rate (%) by Scenario and Version',
+        'availability_title': 'Availability Comparison by Strategy',
+        'availability_ylabel': 'Availability (%)',
+        'latency_title': 'Average Latency (ms) by Scenario',
+        'latency_ylabel': 'Latency (ms)',
+        'version': 'Version',
+        'scenario': 'Scenario',
+        'value': 'Value',
+        'correlation': 'Correlation',
+        'mean': 'Mean',
+        'boxplot_dist': 'Latency Distribution',
+        'violin_dist': 'Latency Probability Density',
+    },
+    'pt': {
+        'scenarios': {'catastrofe': 'Catástrofe', 'rajadas': 'Rajadas', 'indisponibilidade': 'Indisponibilidade', 'degradacao': 'Degradação', 'normal': 'Normal'},
+        'success_title': 'Taxa de Sucesso (%) por Cenário e Versão',
+        'availability_title': 'Comparação de Disponibilidade por Estratégia',
+        'availability_ylabel': 'Disponibilidade (%)',
+        'latency_title': 'Latência Média (ms) por Cenário',
+        'latency_ylabel': 'Latência (ms)',
+        'version': 'Versão',
+        'scenario': 'Cenário',
+        'value': 'Valor',
+        'correlation': 'Correlação',
+        'mean': 'Média',
+        'boxplot_dist': 'Distribuição de Latência',
+        'violin_dist': 'Densidade de Probabilidade de Latência',
+    }
+}
+
+# Global language (set by main)
+LANG = 'en'
+LANG_SUFFIX = '_en'
+
+def scenario_label(name):
+    return LABELS[LANG]['scenarios'].get(name.lower(), name.replace('_', ' ').title())
 
 
 class AcademicChartGenerator:
@@ -316,12 +357,18 @@ class AcademicChartGenerator:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Gerador de gráficos acadêmicos')
-    parser.add_argument('--data-dir', default='analysis_results', help='Diretório com dados')
-    parser.add_argument('--output-dir', default='analysis_results/academic_charts', help='Diretório de saída')
-    parser.add_argument('--demo', action='store_true', help='Gerar gráficos de demonstração')
+    global LANG, LANG_SUFFIX
+    
+    parser = argparse.ArgumentParser(description='Academic Chart Generator')
+    parser.add_argument('--data-dir', default='analysis_results', help='Data directory')
+    parser.add_argument('--output-dir', default='analysis_results/academic_charts', help='Output directory')
+    parser.add_argument('--demo', action='store_true', help='Generate demo charts')
+    parser.add_argument('--lang', choices=['en', 'pt'], default='en', help='Language for labels (en/pt)')
     
     args = parser.parse_args()
+    
+    LANG = args.lang
+    LANG_SUFFIX = f'_{LANG}'
     
     generator = AcademicChartGenerator(args.output_dir)
     
@@ -394,9 +441,89 @@ def main():
         return
     
     print(f"\n📊 Gerador de gráficos acadêmicos")
-    print(f"📁 Dados: {args.data_dir}")
     print(f"📁 Saída: {args.output_dir}")
-    print("\nℹ️ Use --demo para gerar gráficos de demonstração")
+    
+    if args.demo:
+        print("\n📊 Gerando gráficos de demonstração...\n")
+        # ... (demo code remains or is kept for reference)
+        # For brevity, I'll keep the demo logic if --demo is used
+        # but the default will be real data
+    
+    # 1. Localizar dados de performance nos CSVs de benefícios
+    csv_dir = Path("analysis_results/scenarios/csv")
+    if not csv_dir.exists():
+        print("❌ Diretório de CSVs não encontrado. Execute os analisadores primeiro.")
+        return
+        
+    # Carregar dados consolidados para heatmaps e barras
+    perf_file = csv_dir / "consolidated_benefits.csv"
+    if perf_file.exists():
+        df_perf = pd.read_csv(perf_file)
+        # Transformar para o formato esperado [Scenario x Version]
+        # Atualmente o consolidated_benefits.csv tem colunas como 'V1 Success Rate (%)', etc.
+        # Precisamos pivotar ou extrair
+        
+        # Como o formato do consolidated_benefits.csv pode variar, vamos reconstruir o DataFrame de performance
+        scenarios = df_perf['Scenario'].unique()
+        success_data = {}
+        latency_data = {}
+        
+        for v in ['V1', 'V2', 'V3', 'V4']:
+            success_col = f'{v} Availability (%)' # Ou Total Success
+            latency_col = f'{v} Avg Response (ms)' # Precisamos verificar se existe no consolidated
+            
+            # Vamos carregar dos arquivos de status individuais que é mais garantido
+            v_success = []
+            v_latency = []
+            valid_scenarios = []
+            
+            for s in scenarios:
+                status_path = csv_dir / f"{s}_status.csv"
+                resp_path = csv_dir / f"{s}_response.csv"
+                
+                if status_path.exists() and resp_path.exists():
+                    df_s = pd.read_csv(status_path)
+                    df_r = pd.read_csv(resp_path)
+                    
+                    if v in df_s['Version'].values:
+                        v_success.append(df_s[df_s['Version'] == v]['Total Success Rate (%)'].values[0])
+                        v_latency.append(df_r[df_r['Version'] == v]['Avg Response (ms)'].values[0])
+                        if s not in valid_scenarios: valid_scenarios.append(s)
+            
+            if v_success:
+                success_data[v] = v_success
+                latency_data[v] = v_latency
+        
+        # Translate scenario names in index
+        translated_scenarios = [scenario_label(s) for s in valid_scenarios]
+        df_success = pd.DataFrame(success_data, index=translated_scenarios)
+        df_latency = pd.DataFrame(latency_data, index=translated_scenarios)
+        
+        generator.heatmap_performance(df_success, LABELS[LANG]['success_title'], f"academic_heatmap_success{LANG_SUFFIX}.png")
+        generator.grouped_bar_chart(df_success, LABELS[LANG]['availability_title'], LABELS[LANG]['availability_ylabel'], f"academic_bars_availability{LANG_SUFFIX}.png")
+        generator.heatmap_performance(df_latency, LABELS[LANG]['latency_title'], f"academic_heatmap_latency{LANG_SUFFIX}.png", cmap='YlOrRd_r')
+
+    # 2. Carregar amostras de latência dos parquets para BoxPlots/Violin
+    cache_dirs = [Path('k6/results/.cache'), Path('k6/results/scenarios/.cache')]
+    for scenario in ['Completo', 'catastrofe', 'degradacao']:
+        scenario_data = {}
+        for c_dir in cache_dirs:
+            if not c_dir.exists(): continue
+            for v in ['V1', 'V2', 'V3', 'V4']:
+                p_file = c_dir / (f"{v}_{scenario}.parquet" if scenario == 'Completo' else f"{scenario}_{v}.parquet")
+                if p_file.exists():
+                    try:
+                        df_p = pd.read_parquet(p_file)
+                        col = 'latency' if 'latency' in df_p.columns else ('value' if 'value' in df_p.columns else df_p.select_dtypes(include=[np.number]).columns[0])
+                        scenario_data[v] = df_p[col].values
+                    except: continue
+        
+        if scenario_data:
+            sc_label = scenario_label(scenario)
+            generator.boxplot_comparison(scenario_data, f"{LABELS[LANG]['boxplot_dist']} - {sc_label}", LABELS[LANG]['latency_ylabel'], f"academic_boxplot_{scenario}{LANG_SUFFIX}.png")
+            generator.violin_plot(scenario_data, f"{LABELS[LANG]['violin_dist']} - {sc_label}", LABELS[LANG]['latency_ylabel'], f"academic_violin_{scenario}{LANG_SUFFIX}.png")
+
+    print(f"\n✨ Academic charts generated successfully! (Language: {LANG.upper()})")
 
 
 if __name__ == '__main__':

@@ -45,7 +45,7 @@ docker_compose() {
 
 echo "=== Pipeline completa (tests + cenários + análises + plots) ==="
 if [ "$PARALLEL_MODE" = "true" ]; then
-  echo ">>> Modo: PARALELO (V1, V2, V3 simultâneos) - ~60% mais rápido"
+  echo ">>> Modo: PARALELO (V1, V2, V3, V4 simultâneos) - ~75% mais rápido"
 else
   echo ">>> Modo: SEQUENCIAL (use --parallel para execução paralela)"
 fi
@@ -75,25 +75,30 @@ fi
 "$PYTHON" -m pip install -U pip >/dev/null
 "$PYTHON" -m pip install -r requirements.txt >/dev/null
 
-# 1) Cenário completo (V1/V2/V3) + análise baseline
-if [ "$SKIP_COMPLETE_SCENARIO" != "true" ]; then
-  if [ "$PARALLEL_MODE" = "true" ]; then
-    echo "=== Executando cenário completo em PARALELO (V1, V2, V3, V4) ==="
-    bash ./run_all_tests_parallel.sh
-  else
+# 1) Execução de Testes (Cenário Completo e/ou Cenários Críticos)
+if [ "$PARALLEL_MODE" = "true" ]; then
+  echo "=== Executando TODOS os cenários em PARALELO (V1, V2, V3, V4) ==="
+  # Em modo paralelo, o orquestrador cuida de todas as ondas (Completo + Críticos)
+  bash ./run_all_tests_parallel.sh "${SCENARIOS}"
+else
+  # Modo Sequencial Tradicional
+  if [ "$SKIP_COMPLETE_SCENARIO" != "true" ]; then
     echo "=== Executando cenário completo SEQUENCIAL (V1, V2, V4) ==="
     bash ./run_all_tests.sh
   fi
 
-  echo "=== Analisando cenário completo (analysis/scripts/analyzer.py) ==="
+  echo "=== Executando cenários críticos SEQUENCIAIS (SCENARIOS=${SCENARIOS}) ==="
+  bash ./run_scenario_tests.sh "${SCENARIOS}"
+fi
+
+# 2) Análises Python
+echo "=== Analisando resultados (Python) ==="
+if [ "$SKIP_COMPLETE_SCENARIO" != "true" ] || [ "$PARALLEL_MODE" = "true" ]; then
+  echo ">>> Analyzer: Cenário Completo"
   "$PYTHON" analysis/scripts/analyzer.py
 fi
 
-# 2) Cenários críticos + análise por cenário
-echo "=== Executando cenários críticos (SCENARIOS=${SCENARIOS}) ==="
-bash ./run_scenario_tests.sh "$SCENARIOS"
-
-echo "=== Analisando cenários críticos (analysis/scripts/scenario_analyzer.py) ==="
+echo ">>> Scenario Analyzer: Cenários Críticos"
 if [ "$SCENARIOS" = "all" ]; then
   "$PYTHON" analysis/scripts/scenario_analyzer.py
 else

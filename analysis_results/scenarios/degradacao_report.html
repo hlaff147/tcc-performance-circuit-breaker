@@ -107,7 +107,7 @@
                     <h4>📌 Contexto do Cenário: Degradação Gradual</h4>
                     <p><strong>Situação:</strong> API externa degrada progressivamente (5% → 20% → 50% de falhas).</p>
                     <p><strong>Objetivo do CB:</strong> Detectar degradação precocemente e proteger contra sobrecarga.</p>
-                    <p><strong>Interpretação correta:</strong> CB bloqueou 0.0% das requests para <strong>evitar falhas</strong>. V2 reduziu falhas reais em 81.4%.</p>
+                    <p><strong>Interpretação correta:</strong> CB bloqueou 0.0% das requests para <strong>evitar falhas</strong>. V2 reduziu falhas reais em 82.6%.</p>
                 </div>
                 
                 
@@ -117,22 +117,22 @@
                     <ul>
                         <li><strong>Redução de Falhas (500):</strong> 
                             <span class="improvement">
-                                81.36%
+                                82.60%
                             </span>
                         </li>
                         <li><strong>Melhoria no tempo médio:</strong> 
                             <span class="improvement">
-                                69.17%
+                                74.19%
                             </span>
                         </li>
                         <li><strong>Melhoria no P95:</strong> 
                             <span class="improvement">
-                                14.22%
+                                17.80%
                             </span>
                         </li>
                         <li><strong>Melhoria no P99:</strong> 
                             <span class="improvement">
-                                3.10%
+                                2.93%
                             </span>
                         </li>
                         <li><strong>Requisições protegidas:</strong> 0</li>
@@ -155,17 +155,17 @@
                     <tbody>
                         <tr>
                             <td>V1</td>
-                            <td>75.4%</td>
+                            <td>75.3%</td>
                             <td>0.0%</td>
                             <td>3.21</td>
                             <td>3.21</td>
                         </tr>
                         <tr>
                             <td>V2</td>
-                            <td>95.4%</td>
-                            <td>64.7%</td>
-                            <td>0.60</td>
-                            <td>0.60</td>
+                            <td>95.7%</td>
+                            <td>69.1%</td>
+                            <td>0.56</td>
+                            <td>0.56</td>
                         </tr>
                     </tbody>
                 </table>
@@ -188,33 +188,43 @@
   <tbody>
     <tr>
       <td>V1</td>
-      <td>731.590302</td>
-      <td>32.280334</td>
-      <td>2830.167551</td>
-      <td>2970.945266</td>
-      <td>3022.806501</td>
-      <td>71.392037</td>
-      <td>28.607963</td>
+      <td>747.851201</td>
+      <td>35.648271</td>
+      <td>2844.273741</td>
+      <td>2977.870456</td>
+      <td>3378.020376</td>
+      <td>70.987326</td>
+      <td>29.012674</td>
     </tr>
     <tr>
       <td>V2</td>
-      <td>225.554578</td>
-      <td>3.335834</td>
-      <td>2427.773622</td>
-      <td>2878.903251</td>
-      <td>3015.728529</td>
-      <td>91.338618</td>
-      <td>8.661382</td>
+      <td>192.992325</td>
+      <td>2.212729</td>
+      <td>2338.044338</td>
+      <td>2890.590676</td>
+      <td>3133.520168</td>
+      <td>92.745046</td>
+      <td>7.246186</td>
     </tr>
     <tr>
       <td>V3</td>
-      <td>1067.265594</td>
-      <td>986.720167</td>
-      <td>2832.412768</td>
-      <td>2972.488959</td>
-      <td>3046.771945</td>
-      <td>48.831169</td>
-      <td>29.531147</td>
+      <td>1084.803225</td>
+      <td>1028.203126</td>
+      <td>2825.352968</td>
+      <td>2975.360022</td>
+      <td>3291.291987</td>
+      <td>48.409599</td>
+      <td>30.562015</td>
+    </tr>
+    <tr>
+      <td>V4</td>
+      <td>168.140911</td>
+      <td>1.946250</td>
+      <td>2222.407967</td>
+      <td>2857.090749</td>
+      <td>3218.310793</td>
+      <td>93.666681</td>
+      <td>6.302316</td>
     </tr>
   </tbody>
 </table>
@@ -239,41 +249,54 @@
   <tbody>
     <tr>
       <td>V1</td>
-      <td>22565.0</td>
-      <td>17004.0</td>
+      <td>22769.0</td>
+      <td>17156.0</td>
       <td>0.0</td>
-      <td>5561.0</td>
+      <td>5613.0</td>
       <td>0.0</td>
-      <td>75.355639</td>
+      <td>75.348061</td>
       <td>0.000000</td>
-      <td>75.355639</td>
-      <td>24.644361</td>
+      <td>75.348061</td>
+      <td>24.651939</td>
       <td>0.0</td>
     </tr>
     <tr>
       <td>V2</td>
-      <td>22699.0</td>
-      <td>6978.0</td>
-      <td>14678.0</td>
-      <td>1043.0</td>
+      <td>22728.0</td>
+      <td>6044.0</td>
+      <td>15709.0</td>
+      <td>975.0</td>
       <td>0.0</td>
-      <td>30.741442</td>
-      <td>64.663642</td>
-      <td>95.405084</td>
-      <td>4.594916</td>
+      <td>26.592749</td>
+      <td>69.117388</td>
+      <td>95.710137</td>
+      <td>4.289863</td>
       <td>0.0</td>
     </tr>
     <tr>
       <td>V3</td>
-      <td>22610.0</td>
-      <td>17280.0</td>
+      <td>22802.0</td>
+      <td>17502.0</td>
       <td>0.0</td>
-      <td>5330.0</td>
+      <td>5300.0</td>
       <td>0.0</td>
-      <td>76.426360</td>
+      <td>76.756425</td>
       <td>0.000000</td>
-      <td>76.426360</td>
-      <td>23.573640</td>
+      <td>76.756425</td>
+      <td>23.243575</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <td>V4</td>
+      <td>22641.0</td>
+      <td>5108.0</td>
+      <td>16783.0</td>
+      <td>750.0</td>
+      <td>0.0</td>
+      <td>22.560841</td>
+      <td>74.126585</td>
+      <td>96.687425</td>
+      <td>3.312575</td>
       <td>0.0</td>
     </tr>
   </tbody>
@@ -293,9 +316,9 @@
                 
                 <div class="success-box">
                     <h4>✅ Por que a "baixa taxa de sucesso" do V2 é na verdade um SUCESSO?</h4>
-                    <p><strong>V1 sem CB:</strong> Taxa de sucesso 75.4%, mas com 24.6% de falhas reais (500) e tempo médio de 732ms (esperando timeouts).</p>
-                    <p><strong>V2 com CB:</strong> Taxa de sucesso 30.7%, mas com apenas 4.6% de falhas reais (500) e tempo médio de 226ms.</p>
-                    <p><strong>Conclusão:</strong> CB bloqueou 0.0% das requests (503) para <strong>proteger contra sobrecarga</strong> e <strong>evitar timeouts de 3 segundos</strong>. O resultado é <strong>81.4% menos falhas reais</strong> e <strong>69.2% de melhoria no tempo de resposta</strong>!</p>
+                    <p><strong>V1 sem CB:</strong> Taxa de sucesso 75.3%, mas com 24.7% de falhas reais (500) e tempo médio de 748ms (esperando timeouts).</p>
+                    <p><strong>V2 com CB:</strong> Taxa de sucesso 26.6%, mas com apenas 4.3% de falhas reais (500) e tempo médio de 193ms.</p>
+                    <p><strong>Conclusão:</strong> CB bloqueou 0.0% das requests (503) para <strong>proteger contra sobrecarga</strong> e <strong>evitar timeouts de 3 segundos</strong>. O resultado é <strong>82.6% menos falhas reais</strong> e <strong>74.2% de melhoria no tempo de resposta</strong>!</p>
                 </div>
                 
                 

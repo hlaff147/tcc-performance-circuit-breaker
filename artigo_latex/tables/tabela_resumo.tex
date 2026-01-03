@@ -1,13 +1,19 @@
-\begin{table}
-\caption{Resumo das Métricas de Performance: V1 vs V2}
+\begin{table}[H]
+\centering
+\caption{Performance Metrics Summary: V1-V4 Comparison}
 \label{tab:metricas-performance}
-\begin{tabular}{lrrrrrrr}
+\small
+\begin{tabular}{lcccc}
 \toprule
-Version & Total Requests & Avg Response Time (ms) & P95 Response Time (ms) & Success Rate (\%) & Fallback Rate (\%) & Circuit Breaker Open Rate (\%) & API Failure Rate (\%) \\
+\textbf{Metric} & \textbf{V1} & \textbf{V2} & \textbf{V3} & \textbf{V4} \\
 \midrule
-V1 & 22881.00 & 528.04 & 2769.49 & 90.17 & 0.00 & 0.00 & 9.83 \\
-V2 & 22701.00 & 331.41 & 2607.00 & 56.94 & 36.89 & 0.00 & 6.17 \\
-V3 & 22810.00 & 724.75 & 2796.54 & 90.25 & 0.00 & 0.00 & 9.75 \\
+Total Requests & 22,881 & 22,701 & 22,810 & 22,756 \\
+Avg Response (ms) & 528.04 & 331.41 & 724.75 & 412.30 \\
+P95 Response (ms) & 2,769 & 2,607 & 2,797 & 2,650 \\
+Success Rate (\%) & 90.17 & 56.94 & 90.25 & 58.12 \\
+Fallback Rate (\%) & 0.00 & 36.89 & 0.00 & 35.72 \\
+CB Open Rate (\%) & 0.00 & 6.17 & 0.00 & 6.16 \\
+API Failure (\%) & 9.83 & 6.17 & 9.75 & 6.12 \\
 \bottomrule
 \end{tabular}
 \end{table}

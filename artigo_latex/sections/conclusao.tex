@@ -7,15 +7,15 @@ This work investigated the fragility of synchronous communication in microservic
 
 Experimental results were conclusive:
 \begin{itemize}
-    \item \textbf{Dramatic Availability Improvement}: V2 (Circuit Breaker) achieved superior Perceived Availability in all failure scenarios. V4 (Composition) further enhanced this by absorbing transient jitters without triggering circuit state changes;
-    \item \textbf{Significant Failure Reduction}: Up to 99.5\% reduction in failure rates;
+    \item \textbf{Dramatic Availability Improvement}: V2 (Circuit Breaker) achieved superior Perceived Availability across all failure scenarios. V4 (Composition) further enhanced this by absorbing transient jitters through its internal retry layer, avoiding unnecessary circuit state changes while maintaining higher functional availability;
+    \item \textbf{Significant Failure Reduction}: Up to 99.0\% reduction in failure rates across critical scenarios;
     \item \textbf{Fallback as Success Strategy}: The HTTP 202 fallback mechanism accounted for up to 99.1\% of successful responses. This shifts the architectural paradigm from \textit{Strict Consistency} to \textit{Eventual Operational Continuity};
-    \item \textbf{Superiority over Retry}: V3 (Retry) demonstrated a "Victim DoS" risk, where excessive retries potentially hinder the recovery of failing downstream services;
-    \item \textbf{Statistical Validation}: Cohen's d = 1.078 confirms large effect size with substantial practical relevance;
+    \item \textbf{Superiority over Retry}: V3 (Retry) demonstrated a ``Victim DoS'' risk, where excessive retries potentially hinder the recovery of failing downstream services;
+    \item \textbf{Statistical Validation}: Cliff's Delta = 0.500 confirms a \textbf{large} effect size with substantial practical relevance in response time reduction;
     \item \textbf{Zero Overhead in Health}: No performance penalty was detected under normal operating conditions.
 \end{itemize}
 
-Beyond numbers, our study highlights the \textbf{qualitative psychological impact}: a "Fail-Fast" response (V2/V4) is systematically better for user satisfaction than a "Hang" followed by an error (V1/V3). Immediate feedback allows the application layer to offer alternatives to the user.
+Beyond the quantitative metrics, our study highlights the \textbf{qualitative psychological impact}: a ``Fail-Fast'' response (V2/V4) is systematically superior for user satisfaction compared to a ``Hang'' followed by an error (V1/V3). Immediate feedback enables the application layer to offer alternatives to users.
 
 \subsection{Contributions}
 
@@ -24,7 +24,7 @@ This paper contributes to the literature by providing:
     \item Robust empirical evidence demonstrating real Circuit Breaker impact across five realistic failure scenarios;
     \item Comparative analysis between Circuit Breaker (V2) and isolated Retry (V3);
     \item Rigorous statistical analysis with effect size measures;
-    \item Reproducible methodology with Docker and k6 that can be replicated for evaluating other resilience patterns.
+    \item Reproducible methodology using Docker and k6 that can be replicated for evaluating other resilience patterns.
 \end{enumerate}
 
 \subsection{Limitations}

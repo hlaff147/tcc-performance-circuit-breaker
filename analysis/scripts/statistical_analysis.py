@@ -313,15 +313,16 @@ class StatisticalAnalyzer:
         
         Args:
             data: Dict no formato {scenario: {version: values}}
-        
-        Returns:
-            DataFrame com todos os resultados
         """
         all_results = []
         
         for scenario, versions in data.items():
-            version_names = list(versions.keys())
+            version_names = [v for v in ['V1', 'V2', 'V3', 'V4'] if v in versions]
+            if not version_names: continue
+            
             version_data = [versions[v] for v in version_names]
+            
+            print(f"📊 Analisando cenário: {scenario} ({', '.join(version_names)})")
             
             # ANOVA se há 3+ grupos
             if len(version_data) >= 3:
@@ -329,19 +330,31 @@ class StatisticalAnalyzer:
                 anova_result['scenario'] = scenario
                 all_results.append(anova_result)
             
-            # t-tests pairwise
+            # t-tests / Mann-Whitney pairwise entre todos
             from itertools import combinations
             for (n1, v1), (n2, v2) in combinations(zip(version_names, version_data), 2):
-                t_result = self.t_test(v1, v2, n1, n2)
-                t_result['scenario'] = scenario
-                all_results.append(t_result)
+                # Usamos Mann-Whitney por ser mais robusto a outliers (comum em latência)
+                mw_result = self.mann_whitney(v1, v2, n1, n2)
+                mw_result['scenario'] = scenario
+                
+                # Calcular também Cohen's d para effect size
+                mw_result['cohens_d'] = float(self.cohens_d(v1, v2))
+                mw_result['effect_size'] = self._interpret_cohens_d(mw_result['cohens_d'])
+                
+                all_results.append(mw_result)
+            
+            # Gerar boxplot para o cenário
+            self.generate_boxplot(version_data, version_names, 
+                                 f"Latência por Versão - {scenario}", 
+                                 "Latência (ms)", f"boxplot_{scenario}.png")
         
         # Salvar resultados
-        df = pd.DataFrame(all_results)
-        df.to_csv(self.output_dir / 'csv' / 'statistical_tests_results.csv', index=False)
-        print(f"✅ Resultados salvos: statistical_tests_results.csv")
-        
-        return df
+        if all_results:
+            df = pd.DataFrame(all_results)
+            df.to_csv(self.output_dir / 'csv' / 'statistical_tests_results.csv', index=False)
+            print(f"✅ Resultados salvos: statistical_tests_results.csv")
+            return df
+        return pd.DataFrame()
     
     def generate_summary_table(self, df: pd.DataFrame) -> str:
         """Gera tabela resumo em Markdown."""
@@ -349,19 +362,20 @@ class StatisticalAnalyzer:
         md_lines.append("## Resumo dos Testes")
         md_lines.append("")
         
-        # Filtrar t-tests
-        t_tests = df[df['test'] == 't-test']
-        if not t_tests.empty:
-            md_lines.append("### Comparações Pairwise (t-test)")
+        # Filtrar t-tests e Mann-Whitney
+        tests = df[df['test'].isin(['t-test', 'Mann-Whitney U'])]
+        if not tests.empty:
+            md_lines.append("### Comparações Pairwise")
             md_lines.append("")
-            md_lines.append("| Cenário | Comparação | p-value | Cohen's d | Efeito | Significativo |")
-            md_lines.append("|---------|------------|---------|-----------|--------|---------------|")
+            md_lines.append("| Cenário | Teste | Comparação | p-value | Cohen's d | Efeito | Significativo |")
+            md_lines.append("|---------|-------|------------|---------|-----------|--------|---------------|")
             
-            for _, row in t_tests.iterrows():
+            for _, row in tests.iterrows():
                 sig = "✅ Sim" if row['significant'] else "❌ Não"
+                test_name = row['test']
                 md_lines.append(
-                    f"| {row.get('scenario', 'N/A')} | {row['group1']} vs {row['group2']} | "
-                    f"{row['p_value']:.4f} | {row['cohens_d']:.3f} | {row['effect_size']} | {sig} |"
+                    f"| {row.get('scenario', 'N/A')} | {test_name} | {row['group1']} vs {row['group2']} | "
+                    f"{row['p_value']:.4f} | {row.get('cohens_d', 0):.3f} | {row.get('effect_size', 'N/A')} | {sig} |"
                 )
             md_lines.append("")
         
@@ -444,13 +458,69 @@ def main():
         print("\n✅ Validação concluída!")
         return
     
-    print(f"\n📊 Análise estatística")
-    print(f"📁 Dados: {args.data_dir}")
+    print(f"\n📊 Análise Estatística Real")
     print(f"📁 Saída: {args.output_dir}\n")
     
-    # Aqui você pode adicionar lógica para carregar dados reais
-    print("ℹ️ Use --validate para testar com dados de exemplo")
-    print("ℹ️ Integre com seus dados reais modificando a função main()")
+    # 1. Localizar arquivos Parquet
+    cache_dirs = [
+        Path('k6/results/.cache'),
+        Path('k6/results/scenarios/.cache')
+    ]
+    
+    experiment_data = {} # {scenario: {version: latencies}}
+    
+    for c_dir in cache_dirs:
+        if not c_dir.exists(): continue
+        
+        for p_file in c_dir.glob("*.parquet"):
+            # Nomes comuns: V1_Completo.parquet, catastrofe_V1.parquet
+            name = p_file.stem
+            if '_Completo' in name:
+                version = name.split('_')[0]
+                scenario = 'Completo'
+            elif '_' in name:
+                # catastrofe_V1
+                parts = name.split('_')
+                scenario = parts[0]
+                version = parts[1]
+            else:
+                continue
+                
+            print(f"📦 Carregando {scenario} {version}...")
+            try:
+                df = pd.read_parquet(p_file)
+                # Filtrar apenas requisições com sucesso (se houver a coluna)
+                # O loader original do FastK6 geralmente inclui 'value' como a latência
+                if 'latency' in df.columns:
+                    latencies = df['latency'].values
+                elif 'value' in df.columns:
+                    latencies = df['value'].values
+                else:
+                    # Tenta pegar a primeira coluna numérica que parece latência
+                    cols = df.select_dtypes(include=[np.number]).columns
+                    if not cols.empty:
+                        latencies = df[cols[0]].values
+                    else:
+                        continue
+                
+                if scenario not in experiment_data:
+                    experiment_data[scenario] = {}
+                experiment_data[scenario][version] = latencies
+            except Exception as e:
+                print(f"⚠️ Erro ao carregar {p_file}: {e}")
+
+    if not experiment_data:
+        print("❌ Nenhum dado real encontrado em k6/results/.cache/ ou k6/results/scenarios/.cache/")
+        print("   Execute os testes primeiro ou use --validate para demonstração.")
+        return
+
+    # 2. Executar análise
+    results_df = analyzer.run_full_analysis(experiment_data)
+    
+    # 3. Gerar sumário
+    if not results_df.empty:
+        analyzer.generate_summary_table(results_df)
+        print("\n✨ Análise estatística finalizada com sucesso!")
 
 
 if __name__ == '__main__':

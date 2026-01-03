@@ -7,7 +7,7 @@
 # Uso:
 #   ./run_scenario_tests.sh [all|catastrofe|degradacao|rajadas|indisponibilidade|normal]
 #
-# Cada cenário roda para V1 e V2, salvando resultados separados.
+# Cada cenário roda para V1, V2, V3 e V4 salvando resultados separados.
 ###############################################################################
 
 set -e

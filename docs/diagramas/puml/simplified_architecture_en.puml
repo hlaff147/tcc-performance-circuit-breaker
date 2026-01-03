@@ -3,41 +3,71 @@
 skinparam componentStyle rectangle
 skinparam backgroundColor white
 skinparam packageStyle rectangle
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
 
-package "Experimental Environment (Docker)" {
-    [K6 Load Generator] as k6 #orange
-    
-    node "Spring Boot Microservices" {
-        [Payment Service\n(V1 / V2 / V3)] as payment #lightblue
-        [Acquirer Service\n(Simulator)] as acquirer #lightgrey
+title Experimental Architecture - Circuit Breaker Performance Study
+
+package "Load Generation" #FFF5E6 {
+    [K6 Load Generator] as k6 #FF9800
+    note right of k6
+      Up to 200 VUs
+      5 Stress Scenarios
+    end note
+}
+
+package "Spring Boot Microservices" #E3F2FD {
+    rectangle "Payment Service Versions" {
+        [V1: Baseline\n(Timeout Only)] as v1 #FFCDD2
+        [V2: Circuit Breaker\n(Resilience4j CB)] as v2 #C8E6C9
+        [V3: Retry\n(Exponential Backoff)] as v3 #BBDEFB
+        [V4: Composition\n(Retry + CB)] as v4 #FFE0B2
     }
+    
+    [Acquirer Service\n(Failure Simulator)] as acquirer #E0E0E0
 }
 
-package "Monitoring & Analysis" {
-    database "Prometheus\n(Metrics Store)" as prom
-    [Python Scripts\n(Scientific Analysis)] as python #yellow
-    file "Academic Reports\n(LaTeX/PNG)" as final_report
+package "Observability & Analysis" #F3E5F5 {
+    database "Prometheus\nMetrics Store" as prom #9C27B0
+    [Python Analytics\n(Scientific Analysis)] as python #FFEB3B
+    file "Academic Outputs\n(LaTeX, PNG, CSV)" as outputs #4CAF50
 }
 
-k6 -right-> payment : "HTTP Load\n(Up to 200 VUs)"
-payment -right-> acquirer : "Feign Client\n(Synchronous)"
-payment .down.> prom : "Metric\nExport"
-prom .right.> python : "Input Data"
-python ..> final_report : "Generates"
+' Connections
+k6 -down-> v1 : HTTP
+k6 -down-> v2 : HTTP
+k6 -down-> v3 : HTTP
+k6 -down-> v4 : HTTP
+
+v1 -right-> acquirer : Feign
+v2 -right-> acquirer : Feign + CB
+v3 -right-> acquirer : Feign + Retry
+v4 -right-> acquirer : Feign + Retry + CB
+
+v1 ..> prom : metrics
+v2 ..> prom : metrics
+v3 ..> prom : metrics
+v4 ..> prom : metrics
+
+prom -right-> python : data
+python -down-> outputs : generates
+
+' Legend
+legend bottom
+  |= Version |= Strategy |= Behavior |
+  | V1 | Timeout Only | Fails on dependency issues |
+  | V2 | Circuit Breaker | Fail-fast with fallback (HTTP 202) |
+  | V3 | Retry | Exponential backoff (3 attempts) |
+  | V4 | Retry + CB | Absorbs jitters, then fail-fast |
+endlegend
 
 note bottom of acquirer
-  Simulates controlled scenarios:
-  - **Catastrophe**: 100% failure (5min)
-  - **Bursts**: intermittent outages
-  - **Degradation**: gradual latency/error increase
-  - **Unavailability**: 75% error rate
-end note
-
-note top of payment
-  **Resilience Versions:**
-  V1: Baseline (Timeout only)
-  V2: Circuit Breaker (Resilience4j)
-  V3: Retry (Exponential Backoff)
+  **Simulated Scenarios:**
+  • Catastrophe: 100% failure (5min)
+  • Bursts: Intermittent outages
+  • Degradation: Gradual latency increase
+  • Unavailability: 75% error rate
+  • Normal: Baseline comparison
 end note
 
 @enduml

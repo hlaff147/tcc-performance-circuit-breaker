@@ -1,32 +1,36 @@
 \section{Introduction}
 \label{sec:introduction}
 
-The microservices architecture has become ubiquitous in organizations building large-scale digital platforms that require continuous availability and accelerated evolution cycles \cite{newman2021}. E-commerce ecosystems and payment processing systems exemplify this movement, demanding flexibility, fault tolerance, and rapid adaptation to variable transaction volumes.
+Microservices architecture has become the standard paradigm for building large-scale digital platforms that require continuous availability and rapid evolution cycles \cite{newman2021}. E-commerce ecosystems and payment processing systems exemplify this trend, demanding flexibility, fault tolerance, and the ability to adapt to variable transaction volumes.
 
-In this study, we focus on \textbf{Perceived Availability}: the proportion of requests that result in either a successful outcome (HTTP 200/201) or a graceful degradation outcome delivered through a fallback (HTTP 202).
+In this study, we focus on \textbf{Perceived Availability}: the proportion of requests resulting in either a successful outcome (HTTP 200/201) or a graceful degradation response delivered through a fallback mechanism (HTTP 202).
 
-While partitioning functionality into independent services facilitates parallel development and selective scalability, this logical independence relies on real-time interactions between services, typically through REST APIs and declarative clients like Spring Cloud OpenFeign. Synchronous communication simplifies implementation and observability but introduces strong temporal coupling: the consumer service remains blocked until the dependent service responds or a timeout occurs \cite{nygard2018}.
+While partitioning functionality into independent services facilitates parallel development and selective scalability, this logical independence relies on real-time interactions between services, typically via REST APIs and declarative clients such as Spring Cloud OpenFeign. Synchronous communication simplifies implementation and observability but introduces strong temporal coupling: the consumer service remains blocked until the dependent service responds or a timeout occurs \cite{nygard2018}.
 
 \subsection{Problem Statement}
 
-The risk inherent to synchronous communication constitutes the core of this investigation. When a dependent service experiences high latency or intermittent unavailability, the consuming service waits until timeout, keeping threads blocked. With increasing request volume, the thread pool exhausts (\textbf{thread pool starvation}), causing \textbf{cascading failures} that can bring down the entire system.
+The inherent risk of synchronous communication constitutes the core of this investigation. When a dependent service experiences high latency or intermittent unavailability, the consuming service waits until timeout, keeping threads blocked. As request volume increases, the thread pool becomes exhausted (\textbf{thread pool starvation}), triggering \textbf{cascading failures} that can bring down the entire system.
 
-This problem is transversal across software engineering domains: e-commerce, logistics, healthcare, fintech, streaming, and IoT. Any distributed system relying on synchronous HTTP calls is subject to the risks analyzed here.
+This problem is pervasive across software engineering domains: e-commerce, logistics, healthcare, fintech, streaming, and IoT. Any distributed system relying on synchronous HTTP calls is susceptible to the risks analyzed herein.
 
 \subsection{Proposed Solution}
 
-The Circuit Breaker (CB) pattern emerges as a response to these challenges. To understand its operation, a useful analogy is the \textbf{household electrical fuse box}. Just as a fuse "trips" and cuts off electricity when it detects a dangerous power surge—preventing a fire—the Circuit Breaker in software "trips" when it detects a "failure surge", cutting off requests to a failing service to prevent a system-wide collapse.
+The Circuit Breaker (CB) pattern emerges as a robust response to these challenges. To understand its operation, consider the analogy of a \textbf{household electrical fuse box}. Just as a fuse ``trips'' to cut off electricity upon detecting a dangerous power surge---thereby preventing a fire---the Circuit Breaker in software ``trips'' when it detects a ``failure surge,'' halting requests to a failing service and preventing system-wide collapse.
 
-Operating as a state machine with three modes—\textbf{Closed}, \textbf{Open}, and \textbf{Half-Open}—the CB monitors calls to dependent services and interrupts new attempts when failure rates exceed configured thresholds. This provides a \textbf{"Fail-Fast"} mechanism: instead of making users wait for long timeouts that will eventually fail anyway (like waiting in a line at a store that is clearly closed), the system immediately returns a response, protecting resources and improving the perceived user experience \cite{fowler2014cb}.
+Operating as a state machine with three modes---\textbf{Closed}, \textbf{Open}, and \textbf{Half-Open}---the CB monitors calls to dependent services and interrupts new attempts when failure rates exceed configured thresholds. This provides a \textbf{``Fail-Fast''} mechanism: instead of forcing users to wait for long timeouts that will ultimately fail (analogous to waiting in line at a store that is clearly closed), the system immediately returns a response, protecting resources and improving perceived user experience \cite{fowler2014cb}. Studies indicate that correct implementation of this pattern can reduce error rates by up to \textbf{58\%} during periods of instability \cite{ieeecloud2024}.
 
-\subsection{Contribution}
+\subsection{Motivation and Financial Impact}
 
-Despite extensive literature on microservices and resilience patterns, there is a significant gap regarding \textbf{quantitative experimental studies} demonstrating the actual impact of the Circuit Breaker pattern. Most available documentation is limited to conceptual descriptions or trivial examples.
+The relevance of this investigation is underscored by the financial impact of downtime in critical systems. Estimates indicate that the cost of downtime in banking systems ranges between \textbf{US\$ 5,600 and US\$ 9,000 per minute} \cite{bankingdowntime2024}. In large technology companies, losses can reach US\$ 146,000 to US\$ 450,000 per hour of unavailability. With the exponential growth of digital transaction volumes, resilience becomes not merely a technical requirement, but a \textbf{business imperative}.
 
-This paper fills this gap by:
+\subsection{Contributions}
+
+Despite extensive literature on microservices and resilience patterns, a significant gap exists regarding \textbf{quantitative experimental studies} demonstrating the actual impact of the Circuit Breaker pattern. Most available documentation is limited to conceptual descriptions or trivial examples.
+
+This paper addresses this gap by:
 \begin{enumerate}
     \item \textbf{Implementing} a Proof of Concept (POC) simulating a microservices ecosystem with synchronous dependency, instrumented with Resilience4j;
-    \item \textbf{Executing} benchmark campaigns with Docker and k6 to \textbf{empirically measure} throughput, latency (p95), and error rates across controlled scenarios;
+    \item \textbf{Executing} benchmark campaigns using Docker and k6 to \textbf{empirically measure} throughput, latency (p95), and error rates across controlled scenarios;
     \item \textbf{Comparing} four architectural strategies: Baseline (V1), Circuit Breaker (V2), Retry with exponential backoff (V3), and \textbf{Resilience Composition} (V4), which combines Retry and Circuit Breaker;
-    \item \textbf{Providing} rigorous statistical analysis with effect size measures (Cohen's d = 1.078).
+    \item \textbf{Providing} rigorous statistical analysis with effect size measures (Cliff's Delta = 0.500, large effect).
 \end{enumerate}

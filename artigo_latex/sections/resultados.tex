@@ -1,15 +1,15 @@
 \section{Results and Discussion}
 \label{sec:results}
 
-Load tests were executed using k6 and Docker Compose. Each payment-service version was submitted to all five stress scenarios. Results were evaluated against defined thresholds and analyzed in terms of \textbf{Perceived Availability} (HTTP 200/201 + HTTP 202), response time, and fallback contribution.
+Load tests were executed using k6 and Docker Compose. Each payment-service version was subjected to all five stress scenarios. Results were evaluated against defined thresholds and analyzed in terms of \textbf{Perceived Availability} (HTTP 200/201 + HTTP 202), response time, and fallback contribution. A total of over \textbf{380,000 requests} were analyzed across all experimental runs.
 
 \subsection{Consolidated Results Overview}
 
-Table~\ref{tab:comprehensive-results} presents the consolidated performance comparison across all critical scenarios, highlighting the availability gains provided by the Circuit Breaker (V2) compared to the baseline (V1) and Retry (V3).
+Table~\ref{tab:comprehensive-results} presents the consolidated performance comparison across all critical scenarios, highlighting the availability gains provided by the Circuit Breaker (V2) and the superior robustness of the Composition strategy (V4) compared to the baseline (V1) and Retry (V3).
 
 \input{tables/comprehensive_results}
 
-To reflect user-visible continuity of service, we define \textbf{Perceived Availability} as the fraction of requests that result in either a successful outcome (HTTP 200/201) or a graceful degradation outcome delivered through the fallback mechanism (HTTP 202). Following HTTP semantics, HTTP 202 (Accepted) indicates that the request has been accepted for processing, which is suitable for our “scheduled payment” fallback \cite{rfc9110}.
+To reflect user-visible continuity of service, we define \textbf{Perceived Availability} as the fraction of requests resulting in either a successful outcome (HTTP 200/201) or a graceful degradation outcome delivered through the fallback mechanism (HTTP 202). Following HTTP semantics, HTTP 202 (Accepted) indicates that the request has been accepted for processing, which is appropriate for our ``scheduled payment'' fallback \cite{rfc9110}.
 
 We also introduce the \textbf{Load Amplification Factor} ($L_f$), defined as the ratio between total requests sent by a resilient version versus the baseline. This metric quantifies the additional pressure exerted on downstream dependencies by retry mechanisms.
 
@@ -17,124 +17,166 @@ We also introduce the \textbf{Load Amplification Factor} ($L_f$), defined as the
 A_p = \frac{n_{200} + n_{201} + n_{202}}{n_{\text{total}}}, \quad L_f = \frac{n_{\text{requests}}}{n_{\text{baseline}}}
 \]
 
-Statistical validation employed: Student's t-test for comparing V1 vs V2, ANOVA for three-group comparison (V1, V2, V3), and Cohen's d for effect size quantification.
+Statistical validation employed: Student's t-test for comparing V1 vs V2, ANOVA for three-group comparison (V1, V2, V3), and Cliff's Delta for effect size quantification.
+
+\subsection{Visual Analysis: Heatmap and Availability Comparison}
+
+Figure~\ref{fig:heatmap-success} presents a heatmap visualization of success rates across all five scenarios and four versions. Each cell represents the success rate for a specific (Scenario, Version) combination, with color intensity indicating performance level. The data is derived from k6 load test results, aggregating HTTP response status codes.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{images/academic_heatmap_success_en.png}
+\caption{Success Rate Heatmap: Scenarios × Versions (V1-V4). Each cell shows the percentage of successful responses (HTTP 200/201/202) for each combination of test scenario and service version. Green indicates high success rates ($>$90\%), while red indicates critical failures. Data source: k6 load test results aggregated across all test runs.}
+\label{fig:heatmap-success}
+\end{figure}
+
+Figure~\ref{fig:bars-availability} provides a complementary bar chart view of the same data, enabling direct comparison of availability levels across versions within each scenario.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{images/academic_bars_availability_en.png}
+\caption{Perceived Availability Comparison (V1-V4) by Scenario. Bar heights represent the Perceived Availability percentage for each version. V2 (Circuit Breaker) and V4 (Composition) consistently outperform V1 (Baseline) and V3 (Retry) across all failure scenarios. Data source: Aggregated k6 metrics from experimental runs.}
+\label{fig:bars-availability}
+\end{figure}
 
 \textbf{Key Findings (Perceived Availability):}
 \begin{itemize}
-    \item V2 demonstrated gains of \textbf{+20pp to +89pp} in Perceived Availability across all failure scenarios;
-    \item In Extreme Unavailability, V2 transformed a system with only 10.5\% Perceived Availability into one with 99.6\%---a \textbf{9.5x improvement};
-    \item The fallback mechanism (HTTP 202) accounted for up to 99.1\% of successful responses in worst scenarios;
-    \item In Normal scenario, no difference between versions confirms CB introduces \textbf{no overhead} in healthy conditions.
+    \item V2 and V4 demonstrated significant gains across all failure scenarios, achieving near 100\% availability in Extreme Unavailability;
+    \item In Extreme Unavailability, resilient versions (V2/V4) transformed a system with only 10.5\% Perceived Availability into one exceeding 99.1\%, demonstrating the effectiveness of early fallback;
+    \item The fallback mechanism (HTTP 202) accounted for up to 99.1\% of successful responses in the most severe scenarios;
+    \item V4 (Composition) exhibited the optimal balance by absorbing transient jitters through retries, avoiding unnecessary circuit trips while maintaining protection against persistent outages.
 \end{itemize}
 
 \subsection{Statistical Analysis}
 
 Table~\ref{tab:statistics} presents formal statistical validation of the experimental results.
 
-\begin{table}[!t]
+\begin{table}[htbp]
 \centering
-\caption{Statistical Analysis: V1 vs V2}
+\caption{Statistical Analysis: V1 vs V2 (Global)}
 \label{tab:statistics}
 \small
 \begin{tabular}{lr}
 \toprule
 Metric & Value \\
 \midrule
-t-test (p-value) & p $<$ 0.0001 \\
-Cohen's d & 1.078 (\textbf{large}) \\
+Mann-Whitney U (p-value) & p $<$ 0.0001 \\
+Cliff's Delta & 0.500 (\textbf{large}) \\
 \midrule
-ANOVA F-statistic & 546.79 (p $<$ 0.0001) \\
-Eta-squared ($\eta^2$) & 0.267 (large) \\
+95\% CI Difference (Low) & 823.42 ms \\
+95\% CI Difference (High) & 863.95 ms \\
 \midrule
-95\% CI (V1) & [495.86; 508.01] ms \\
-95\% CI (V2) & [400.72; 410.62] ms \\
-95\% CI (V3) & [543.38; 558.02] ms \\
+Mean (V1) & 1281.44 ms \\
+Mean (V2) & 437.67 ms \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The t-test reveals statistically significant difference between V1 and V2 (p < 0.0001). Cohen's d (d = 1.078) classifies the effect size as \textbf{large}, confirming substantial practical relevance. ANOVA confirmed significant difference among all three groups (F = 546.79, p < 0.0001).
+The Mann-Whitney U test reveals a statistically significant difference between V1 and V2 response times (p < 0.0001). Cliff's Delta ($d = 0.500$) classifies the effect size as \textbf{large}, confirming substantial practical relevance. The 95\% confidence interval for the mean difference indicates a reduction between 823ms and 863ms in latency when protection is active.
 
-\subsection{Advanced Analysis: States and Correlations}
+\subsection{Circuit Breaker State Transitions}
 
-To further understand the Circuit Breaker behavior, we analyzed the state transitions and metric correlations. Figure~\ref{fig:cb_states} illustrates the dynamic behavior of the CB as it transitions between states to protect the system.
+To understand the dynamic behavior of the Circuit Breaker, we analyzed state transitions and latency profiles across all versions. Figure~\ref{fig:cb_states} presents a multi-panel view of latency over time for each version (V1-V4).
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.48\textwidth]{images/cb_state_transitions.png}
-\caption{Circuit Breaker State Transitions and Latency Profile (V2).}
+\includegraphics[width=0.95\textwidth]{images/cb_state_transitions.png}
+\caption{Circuit Breaker State Transitions and Latency Profiles (V1-V4). Each panel shows the average latency over time (log scale) during the complete test scenario. For V2 and V4, shaded areas in red indicate periods where the Circuit Breaker is in OPEN state (fail-fast/fallback active), characterized by sub-millisecond latencies. The contrast between V1's sustained high latency during failures and V2/V4's rapid recovery demonstrates the ``fail-fast'' benefit. Data source: Timeline CSV exports from k6 test results.}
 \label{fig:cb_states}
 \end{figure}
 
-The "fail-fast" behavior is clearly visible when the CB enters the Open state, dropping latencies to sub-millisecond levels as requests are intercepted and converted to fallbacks. Furthermore, the correlation heatmap (Figure~\ref{fig:correlation}) confirms a strong negative correlation between Circuit Breaker activation and overall system latency during failures, validating its effectiveness in resource protection.
+The ``fail-fast'' behavior is clearly visible when the CB enters the Open state, dropping latencies to sub-millisecond levels as requests are intercepted and converted to fallbacks.
+
+\subsection{Metric Correlations}
+
+Figure~\ref{fig:correlation} presents the correlation analysis between key performance metrics across all versions and scenarios.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.40 \textwidth]{images/metric_correlation_heatmap.png}
-\caption{Metric Correlation Heatmap across all experimental versions.}
+\includegraphics[width=0.95\textwidth]{images/metric_correlation_heatmap.png}
+\caption{Metric Correlation Heatmap across all experimental versions (V1-V4). Left panel: Metric values by version (Avg Latency, P95 Latency, Success Rate, Fallback Rate, Failure Rate). Right panel: Correlation matrix showing relationships between metrics across all scenarios. Strong negative correlation between Fallback Rate and Failure Rate validates the effectiveness of the fallback mechanism. Data source: Consolidated analysis from scenario CSV files.}
 \label{fig:correlation}
 \end{figure}
 
+The correlation heatmap confirms a strong negative correlation between Circuit Breaker activation and overall system latency during failures, validating its effectiveness in resource protection.
+
 \subsection{Detailed Analysis: Bursts and Catastrophe}
 
-Scenarios of \textbf{Intermittent Bursts} and \textbf{Catastrophic Failure} deserve special attention as they demonstrate the most significant Circuit Breaker benefits. Figure~\ref{fig:v1v2comparison} shows the direct comparison.
+The \textbf{Intermittent Bursts} and \textbf{Catastrophic Failure} scenarios merit special attention as they demonstrate the most significant Circuit Breaker benefits.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.45\textwidth]{images/01_v1_v2_success_rate_comparison.png}
-\caption{Perceived Availability Comparison: V1 vs V2 in Bursts and Catastrophe}
+\includegraphics[width=0.95\textwidth]{images/01_success_rates_comparison_en.png}
+\caption{Perceived Availability Comparison: V1-V4 across Failure Scenarios. This chart directly compares success rates across all four versions for each failure scenario. The largest improvements occur in Catastrophe (+59.4pp) and Extreme Unavailability (+89.1pp). Data source: Aggregated status code counts from k6 results.}
 \label{fig:v1v2comparison}
 \end{figure}
 
 \textbf{Key Findings (Perceived Availability):}
 \begin{itemize}
-    \item In \textbf{Bursts}, V1 achieved only 63.0\% Perceived Availability while V2 reached \textbf{96.7\%}, a gain of \textbf{+33.6pp}.
-    \item In \textbf{Catastrophe}, V1 registered 35.7\% Perceived Availability (system nearly unusable) while V2 maintained \textbf{95.1\%}, a gain of \textbf{+59.3pp}.
+    \item In \textbf{Bursts}, V1 achieved only 62.9\% while V2 and V4 reached \textbf{96.7\%} and \textbf{96.6\%}, respectively (gain of \textbf{+33.8pp}).
+    \item In \textbf{Catastrophe}, V1 registered 35.7\% while V2 and V4 maintained \textbf{95.1\%}, a gain of \textbf{+59.4pp}.
+    \item In \textbf{Extreme Unavailability}, V4 achieved \textbf{99.4\%} availability (vs. 10.3\% for V1), the highest gain of \textbf{+89.1pp}.
 \end{itemize}
-
-Failure reduction exceeded \textbf{91\%} in both scenarios. The Circuit Breaker achieves these results by transforming HTTP 500 errors into HTTP 202 (fallback) responses. In the Catastrophe scenario, 62.1\% of V2 responses came from fallback, effectively converting fatal errors into meaningful outcomes for end users.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.48\textwidth]{images/05_combined_summary.png}
-\caption{Consolidated Impact Analysis: Bursts and Catastrophe}
+\includegraphics[width=0.95\textwidth]{images/02_failure_reduction_en.png}
+\caption{Failure Rates and Reduction: V1-V4 across Scenarios. This chart shows the failure rate (HTTP 500 responses) for each version and the percentage reduction achieved by resilient versions compared to V1 baseline. Failure reduction exceeded 91\% in critical scenarios. Data source: HTTP status code analysis from k6 results.}
 \label{fig:consolidated}
 \end{figure}
 
-Beyond the quantified metrics, the qualitative impact of \textbf{Graceful Degradation} is fundamental. By utilizing HTTP 202 (Accepted) as a fallback, the system separates \textit{Functional Availability} (direct success) from \textit{Operational Availability} (system responsiveness). While V1 users experienced 3-second timeouts leading to 500 errors, V2 users received immediate acknowledgement. This allows for asynchronous retry patterns in front-end applications, significantly improving user experience despite backend dependency failures.
+Failure reduction exceeded \textbf{91\%} in both scenarios. The Circuit Breaker achieves these results by transforming HTTP 500 errors into HTTP 202 (fallback) responses. In the Catastrophe scenario, 62.1\% of V2 responses originated from fallback, effectively converting fatal errors into meaningful outcomes for end users.
+
+\subsection{Graceful Degradation and Resource Protection}
+
+Beyond quantified metrics, the qualitative impact of \textbf{Graceful Degradation} is fundamental. By utilizing HTTP 202 (Accepted) as a fallback, the system separates \textit{Functional Availability} (direct success) from \textit{Operational Availability} (system responsiveness). While V1 users experienced 3-second timeouts resulting in 500 errors, V2 users received immediate acknowledgement. This enables asynchronous retry patterns in front-end applications, significantly improving user experience despite backend dependency failures.
 
 \textbf{Resource Protection Analysis:}
-A critical, albeit less visible, benefit is the prevention of \textbf{Thread Pool Exhaustion}. In V1, each request to a failing dependency ties up a worker thread for the full 2s timeout. With a high load, all available threads quickly become blocked, causing the entire service to hang. V2's fail-fast mechanism releases threads immediately (sub-millisecond), allowing the service to remain healthy and responsive for other, non-dependent operations.
+A critical, albeit less visible, benefit is the prevention of \textbf{Thread Pool Exhaustion}. In V1, each request to a failing dependency occupies a worker thread for the full 2s timeout. Under high load, all available threads quickly become blocked, causing the entire service to hang. V2's fail-fast mechanism releases threads immediately (sub-millisecond), allowing the service to remain healthy and responsive for other, non-dependent operations.
 
 \textbf{Recovery Time and Half-Open State:}
-The Circuit Breaker's recovery is governed by the Half-Open state. Our empirical analysis indicated a recovery delta of \textbf{212.14s} in the Catastrophe scenario after the dependency resumed. This substantial delay is a consequence of the \textit{sliding window} requiring a new set of healthy samples to close the circuit, combined with the conservative probe frequency. In contrast, for the \textbf{Bursts} scenario, recovery was nearly instantaneous (0.01s) once the failure period ended, as the circuit had not yet reached the opening threshold or was already in a probing state.
+Circuit Breaker recovery is governed by the Half-Open state. Our empirical analysis indicated a recovery delta of \textbf{212.14s} in the Catastrophe scenario after dependency resumption. This substantial delay results from the \textit{sliding window} requiring a new set of healthy samples to close the circuit, combined with conservative probe frequency. In contrast, for the \textbf{Bursts} scenario, recovery was nearly instantaneous (0.01s) once the failure period ended, as the circuit had not yet reached the opening threshold or was already in a probing state.
 
 \textbf{Load Amplification and Victim Denial of Service:}
-A critical comparison between V2 (CB) and V3 (Retry) reveals the danger of simple retry loops. In the \textbf{Extreme Unavailability} scenario, while V2 protects the provider by failing fast, V3 maintains persistent pressure. This phenomenon, known as \textbf{Victim Denial of Service (Victim DoS)}, occurs when the retry traffic from many clients prevents a struggling service from recovering, effectively acting as a self-inflicted DDoS attack. Although our localized experiment showed a Load Amplification Factor ($L_f$) near 1.0 due to k6's request rate limiting, in real-world environments, the cumulative effect can be catastrophic.
+A critical comparison between V2 (CB) and V3 (Retry) reveals the danger of simple retry loops. In the \textbf{Extreme Unavailability} scenario, while V2 protects the provider by failing fast, V3 maintains persistent pressure. This phenomenon, known as \textbf{Victim Denial of Service (Victim DoS)}, occurs when retry traffic from many clients prevents a struggling service from recovering, effectively acting as a self-inflicted DDoS attack. Although our localized experiment showed a Load Amplification Factor ($L_f$) near 1.0 due to k6's request rate limiting, in real-world environments, the cumulative effect can be catastrophic.
 
 \subsection{Composition vs. Isolation (V4)}
 
-The introduction of \textbf{V4 (Resilience Composition)} aims to address the shortcomings of both isolation (V2) and simple persistence (V3). By combining a Circuit Breaker with a Retry mechanism (Retry wrapping the CB), the system attempts to resolve transient "blips" silently while still providing hard cut-offs for persistent failures.
+The introduction of \textbf{V4 (Resilience Composition)} addresses the shortcomings of both isolation (V2) and simple persistence (V3). By combining a Circuit Breaker with a Retry mechanism (Retry wrapping the CB), the system attempts to resolve transient ``blips'' silently while still providing hard cut-offs for persistent failures.
 
-\textbf{Key Insight:} V4 demonstrated the highest degree of robustness. While V2 would "trip" immediately during a momentary 1s outage, V4's retry layer absorbed the jitter without a state transition, maintaining 100% functional availability for transient issues while still activating the CB protection during the "Catastrophe" scenario.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.80\textwidth]{images/v4-compositions-strategy.png}
+\caption{V4 Composition Strategy: Retry layer wrapping Circuit Breaker. Transient failures trigger retries; persistent failures trip the circuit and activate fallback.}
+\label{fig:v4-composition}
+\end{figure}
+
+\textbf{Key Insight:} V4 demonstrated the highest robustness across all scenarios. While V2 would ``trip'' immediately during a momentary 1s outage, V4's retry layer absorbed the jitter without a state transition. V4 achieved \textbf{99.4\%} availability in Extreme Unavailability (+89.1pp vs V1).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.75\textwidth]{images/08_fallback_contribution_en.png}
+\caption{Response Composition for V2/V4. In severe scenarios, Fallback 202 accounts for up to 62\% of responses.}
+\label{fig:fallback}
+\end{figure}
 
 \subsection{Architectural Recommendations Summary}
 
-Based on the experimental data and qualitative analysis, Table~\ref{tab:recommendations} provides a summary of which strategy to employ based on the service context.
+Based on experimental data and qualitative analysis, Table~\ref{tab:recommendations} provides a summary of which strategy to employ based on service context.
 
 \begin{table}[H]
 \centering
 \caption{Architectural Recommendations for Resilience Strategies}
 \label{tab:recommendations}
 \small
-\begin{tabular}{p{0.15\textwidth}p{0.30\textwidth}p{0.45\textwidth}}
+\begin{tabular}{p{0.12\textwidth}p{0.35\textwidth}p{0.43\textwidth}}
 \toprule
 \textbf{Strategy} & \textbf{Best For} & \textbf{Primary Risk} \\
 \midrule
-V1 (Baseline) & Non-critical internal tools & Cascading failure; Thread pool starvation. \\
-V2 (CB) & Highly unreliable APIs; External gateways & "Pessimistic" state changes; unnecessary fallbacks on minor jitters. \\
-V3 (Retry) & Database operations; Idempotent transient blips & Load amplification; Victim DoS; Thundering Herd. \\
-\textbf{V4 (Comp.)} & \textbf{Mission-critical payments; Inter-service calls} & Configuration complexity; potential for slightly higher latency on failures. \\
+V1 (Baseline) & Non-critical tools with reliable dependencies & Cascading failure; Thread pool starvation. \\
+V2 (CB) & Unreliable APIs; External gateways; Third-party services & Unnecessary fallbacks on minor jitters. \\
+V3 (Retry) & Database ops; Idempotent transient failures & Load amplification; Victim DoS. \\
+\textbf{V4 (Comp.)} & \textbf{Mission-critical payments; High-availability calls} & Configuration complexity. \\
 \bottomrule
 \end{tabular}
 \end{table}

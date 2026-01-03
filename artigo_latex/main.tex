@@ -1,4 +1,4 @@
-\documentclass[10pt,twocolumn]{article}
+\documentclass[12pt]{article}
 
 % Essential packages (basic TeX Live)
 \usepackage[utf8]{inputenc}
@@ -11,59 +11,66 @@
 \usepackage{enumitem}
 \setlist{nosep} % Global setting for compact lists
 \usepackage{url}
+\usepackage[alf]{abntex2cite}  % ABNT citations (Author-date)
 \usepackage{float}
 \usepackage{geometry}
 \usepackage{times}
+\usepackage{indentfirst}
 
-% Page layout similar to IEEE
+% Page layout for UFPE TCC Article format
 \geometry{
-    letterpaper,
-    left=0.68in,
-    right=0.68in,
-    top=0.75in,
-    bottom=1in,
-    columnsep=0.25in
+    a4paper,
+    left=3cm,
+    right=2cm,
+    top=3cm,
+    bottom=2cm
 }
+
+% Line spacing 1.5
+\linespread{1.3}
 
 % Settings
 \graphicspath{{images/}}
 \raggedbottom
 
-% Title formatting
+% Custom title formatting for UFPE style
 \makeatletter
 \renewcommand{\maketitle}{%
-    \twocolumn[%
-        \begin{center}
-            {\LARGE\bfseries\@title\par}
-            \vskip 1em
-            {\large\@author\par}
-            \vskip 1.5em
-        \end{center}
-    ]%
+    \begin{center}
+        {\Large\bfseries\@title\par}
+        \vskip 1.5em
+        {\normalsize\@author\par}
+        \vskip 2em
+    \end{center}
 }
 \makeatother
+
+% Section formatting
+\usepackage{titlesec}
+\titleformat{\section}{\normalfont\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalfont\bfseries}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalfont\itshape}{\thesubsubsection}{0.5em}{}
 
 \begin{document}
 
 \title{Quantitative Evaluation of the Circuit Breaker Pattern\\in Microservices: An Empirical Study on Resilience and Performance}
 
 \author{
-\textbf{Humberto Laff}\\
-Centro de Inform\'atica (CIn)\\
+\textbf{Humberto Laff}$^{1}$, \textbf{Jamilson Ramalho Dantas}$^{1}$ (Advisor)\\[0.5em]
+$^{1}$Centro de Inform\'atica (CIn)\\
 Universidade Federal de Pernambuco (UFPE)\\
-Recife, Brazil\\
-\textit{hlaff@cin.ufpe.br}
+50740-560 -- Recife -- PE -- Brazil\\[0.5em]
+\texttt{\{hlaff, jrd\}@cin.ufpe.br}
 }
 
 \maketitle
 
-\begin{abstract}
-Microservices architectures have become the standard for building modern distributed systems, but synchronous communication between services introduces the risk of cascading failures. The Circuit Breaker pattern is widely recommended as a mitigation strategy, yet there is a lack of empirical studies quantifying its actual impact. This paper presents a controlled experimental evaluation comparing three service versions: V1 (Baseline without resilience), V2 (Circuit Breaker with Resilience4j), and V3 (Retry with exponential backoff). Using Docker orchestration and k6 load testing across five realistic failure scenarios, we analyzed over 380,000 requests. Results demonstrate that Circuit Breaker improved availability from 10.5\% to 99.6\% in extreme unavailability scenarios---a 9.5x improvement. Statistical analysis confirmed a large effect size (Cohen's d = 1.078, p $<$ 0.0001). Our findings provide robust empirical evidence that Circuit Breaker is essential for mission-critical synchronous microservices, while Retry alone is insufficient for persistent failures.
-\end{abstract}
-
-\noindent\textbf{Keywords:} Circuit Breaker, Microservices, Fault Tolerance, Resilience Patterns, Performance Evaluation
+\noindent\textbf{\textit{Abstract.}} Microservices architectures have become the standard for building modern distributed systems, but synchronous communication between services introduces the risk of cascading failures. The Circuit Breaker pattern is widely recommended as a mitigation strategy, yet there is a lack of empirical studies quantifying its actual impact. This paper presents a controlled experimental evaluation comparing four service versions: V1 (Baseline without resilience), V2 (Circuit Breaker with Resilience4j), V3 (Retry with exponential backoff), and V4 (Composition of Retry + Circuit Breaker). Using Docker orchestration and k6 load testing across five realistic failure scenarios, we analyzed over 380,000 requests. Results demonstrate that Circuit Breaker improved availability from 10.3\% to 99.4\% in extreme unavailability scenarios---a gain of +89.1 percentage points. Statistical analysis confirmed a medium effect size (Cliff's Delta = 0.348, p $<$ 0.0001). Our findings provide robust empirical evidence that Circuit Breaker is essential for mission-critical synchronous microservices, while Retry alone is insufficient for persistent failures. V4 (Composition) demonstrated the highest robustness, absorbing transient jitters while maintaining protection against persistent failures.
 
 \vspace{1em}
+\noindent\textbf{Keywords:} Circuit Breaker, Microservices, Fault Tolerance, Resilience Patterns, Performance Evaluation
+
+\vspace{2em}
 
 % Sections
 \input{sections/introducao}
@@ -73,7 +80,7 @@ Microservices architectures have become the standard for building modern distrib
 \input{sections/conclusao}
 
 % References
-\bibliographystyle{plain}
+\bibliographystyle{abntex2-alf}
 \bibliography{references}
 
 \end{document}

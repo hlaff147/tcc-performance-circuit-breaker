@@ -3,9 +3,9 @@ set -euo pipefail
 
 # =============================================================================
 # run_all_tests_parallel.sh
-# Executa testes k6 para V1, V2 e V3 em PARALELO com ambientes 100% ISOLADOS
+# Executa testes k6 para V1, V2, V3 e V4 em PARALELO com ambientes 100% ISOLADOS
 # Cada versão tem seu próprio adquirente dedicado - sem interferência
-# Economia de tempo: ~60% (de ~30min para ~12min)
+# Economia de tempo: ~75% (de ~40min para ~12min)
 # =============================================================================
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -84,7 +84,11 @@ run_k6_for_version() {
   local version_upper="$(echo ${version} | tr '[:lower:]' '[:upper:]')"
   local log_file="${LOG_DIR}/${version}.log"
   
-  echo "[${version_upper}] Iniciando teste..." | tee "${log_file}"
+  # Argumentos extras para o k6
+  local k6_scenario_file="${2:-cenario-completo.js}"
+  local k6_scenario_label="${3:-Completo}"
+  
+  echo "[${version_upper}] Iniciando teste (${k6_scenario_label})..." | tee -a "${log_file}"
   
   # Aguarda o container específico estar pronto via porta do host
   local health_url="http://localhost:${port}/actuator/health"
@@ -95,14 +99,27 @@ run_k6_for_version() {
     return 1
   fi
   
-  echo "[${version_upper}] Container pronto. Aguardando estabilização (15s)..." | tee -a "${log_file}"
-  sleep 15
+  echo "[${version_upper}] Container pronto. Aguardando estabilização (10s)..." | tee -a "${log_file}"
+  sleep 10
   
-  # Executa o k6 apontando para o container específico via nome na rede Docker
-  local scenario_file="cenario-completo.js"
-  local output_prefix="${K6_RESULTS_HOST_DIR}/${version_upper}_Completo"
-  
-  echo "[${version_upper}] Executando k6 -> ${container}:8080..." | tee -a "${log_file}"
+  # Determina o diretório de saída (scenarios/ se não for o completo)
+  local output_dir="${K6_RESULTS_HOST_DIR}"
+  local container_output_path="/results"
+  local json_name="${k6_scenario_label}_${version_upper}.json"
+  local summary_name="${k6_scenario_label}_${version_upper}_summary.json"
+
+  if [ "${k6_scenario_label}" != "Completo" ]; then
+    output_dir="${K6_RESULTS_HOST_DIR}/scenarios"
+    container_output_path="/results/scenarios"
+    mkdir -p "${output_dir}"
+    chmod 777 "${output_dir}"
+  else
+    # Convenção do analyzer.py: V1_Completo.json
+    json_name="${version_upper}_Completo.json"
+    summary_name="${version_upper}_Completo_summary.json"
+  fi
+
+  echo "[${version_upper}] Executando k6 (${k6_scenario_label}) -> ${container}:8080..." | tee -a "${log_file}"
   
   docker run --rm -i \
     --network="${NETWORK_NAME}" \
@@ -112,16 +129,52 @@ run_k6_for_version() {
     -v "${BASE_K6_SCRIPTS_DIR}:/scripts:ro" \
     -v "${K6_RESULTS_HOST_DIR}:/results" \
     "${K6_IMAGE}" run \
-    "/scripts/${scenario_file}" \
-    --out "json=/results/${version_upper}_Completo.json" \
-    --summary-export "/results/${version_upper}_Completo_summary.json" 2>&1 | tee -a "${log_file}" || true
+    "/scripts/${k6_scenario_file}" \
+    --out "json=${container_output_path}/${json_name}" \
+    --summary-export "${container_output_path}/${summary_name}" 2>&1 | tee -a "${log_file}" || true
   
-  echo "[${version_upper}] Teste concluído!" | tee -a "${log_file}"
+  echo "[${version_upper}] Teste (${k6_scenario_label}) concluído!" | tee -a "${log_file}"
 }
 
 cleanup() {
   echo "Encerrando containers..."
   ${DOCKER_COMPOSE_CMD} -f "${COMPOSE_FILE}" down --remove-orphans >/dev/null 2>&1 || true
+}
+
+run_scenario_wave() {
+  local scenario_file="$1"
+  local scenario_label="$2"
+  local PW_PIDS=()
+
+  echo "----------------------------------------------------------------------"
+  echo ">>> Onda Paralela: ${scenario_label}"
+  echo "----------------------------------------------------------------------"
+
+  # Inicia V1
+  run_k6_for_version "v1" "${scenario_file}" "${scenario_label}" &
+  PW_PIDS+=($!)
+  
+  # Inicia V2
+  run_k6_for_version "v2" "${scenario_file}" "${scenario_label}" &
+  PW_PIDS+=($!)
+  
+  # Inicia V3 (se habilitado)
+  if [ "${INCLUDE_V3}" = "true" ]; then
+    run_k6_for_version "v3" "${scenario_file}" "${scenario_label}" &
+    PW_PIDS+=($!)
+  fi
+
+  # Inicia V4 (sempre ativo)
+  run_k6_for_version "v4" "${scenario_file}" "${scenario_label}" &
+  PW_PIDS+=($!)
+  
+  local FAILED_WAVE=0
+  for pid in "${PW_PIDS[@]}"; do
+    if ! wait "${pid}"; then
+      FAILED_WAVE=$((FAILED_WAVE + 1))
+    fi
+  done
+  return ${FAILED_WAVE}
 }
 
 main() {
@@ -135,6 +188,7 @@ main() {
     exit 1
   fi
 
+  local TARGET_SCENARIOS="${1:-Completo}"
   INCLUDE_V3="${INCLUDE_V3:-true}"
 
   pushd "${PROJECT_ROOT}" >/dev/null
@@ -142,87 +196,76 @@ main() {
 
   echo ""
   echo "╔══════════════════════════════════════════════════════════════════╗"
-  echo "║  EXECUÇÃO PARALELA COM AMBIENTES 100% ISOLADOS                   ║"
-  echo "║  Cada versão (V1, V2, V3) tem seu próprio adquirente dedicado    ║"
+  echo "║  EXECUÇÃO PARALELA (V1-V4) - AMBIENTES ISOLADOS                  ║"
+  echo "║  Cenários solicitados: ${TARGET_SCENARIOS}                         ║"
   echo "╚══════════════════════════════════════════════════════════════════╝"
   echo ""
   
-  # 1) Para containers anteriores
-  echo "Finalizando containers anteriores..."
+  # 1) Para e limpa containers anteriores
+  echo "Limpando ambiente..."
   ${DOCKER_COMPOSE_CMD} -f "${COMPOSE_FILE}" down --remove-orphans >/dev/null 2>&1 || true
-  ${DOCKER_COMPOSE_CMD} down --remove-orphans >/dev/null 2>&1 || true
 
-  # 2) Sobe TODOS os containers de uma vez usando o compose paralelo
-  echo ""
-  echo "Subindo ambientes isolados:"
-  echo "  • V1: servico-pagamento-v1 + servico-adquirente-v1"
-  echo "  • V2: servico-pagamento-v2 + servico-adquirente-v2"
-  if [ "${INCLUDE_V3}" = "true" ]; then
-    echo "  • V3: servico-pagamento-v3 + servico-adquirente-v3"
-  fi
-  echo ""
-  
-  # Define quais serviços subir
-  SERVICES="servico-adquirente-v1 servico-pagamento-v1 servico-adquirente-v2 servico-pagamento-v2"
+  # 2) Sobe TODOS os containers
+  echo "Subindo serviços..."
+  SERVICES="servico-adquirente-v1 servico-pagamento-v1 servico-adquirente-v2 servico-pagamento-v2 servico-adquirente-v4 servico-pagamento-v4"
   if [ "${INCLUDE_V3}" = "true" ]; then
     SERVICES="${SERVICES} servico-adquirente-v3 servico-pagamento-v3"
   fi
-  
   ${DOCKER_COMPOSE_CMD} -f "${COMPOSE_FILE}" up -d --build ${SERVICES}
   
-  echo ""
-  echo "Aguardando 45 segundos para inicialização dos containers..."
+  echo "Aguardando 45s para inicialização..."
   sleep 45
 
-  # 3) Executa testes em paralelo
-  echo ""
-  echo "Iniciando testes k6 em paralelo (cada um em seu ambiente isolado)..."
-  echo ""
+  # 3) Determina quais ondas executar
+  TOTAL_FAILED=0
   
-  # Array para armazenar PIDs dos processos em background (compatível com Bash 3.x)
-  PIDS=()
-  
-  # Inicia V1
-  run_k6_for_version "v1" &
-  PIDS+=($!)
-  
-  # Inicia V2
-  run_k6_for_version "v2" &
-  PIDS+=($!)
-  
-  # Inicia V3 (se habilitado)
-  if [ "${INCLUDE_V3}" = "true" ]; then
-    run_k6_for_version "v3" &
-    PIDS+=($!)
-  fi
-
-  # Inicia V4 (sempre ativo)
-  run_k6_for_version "v4" &
-  PIDS+=($!)
-  
-  # Aguarda todos os processos terminarem
-  echo "Aguardando conclusão de todos os testes..."
-  echo "(Logs individuais em ${LOG_DIR}/)"
-  echo ""
-  
-  FAILED=0
-  for pid in "${PIDS[@]}"; do
-    if ! wait "${pid}"; then
-      FAILED=$((FAILED + 1))
+  # Se for "all", executa a lista completa
+  if [ "${TARGET_SCENARIOS}" = "all" ]; then
+    # Onda 1: Completo
+    run_scenario_wave "cenario-completo.js" "Completo" || TOTAL_FAILED=$((TOTAL_FAILED + 1))
+    
+    # Onda 2: Catástrofe
+    run_scenario_wave "cenario-falha-catastrofica.js" "catastrofe" || TOTAL_FAILED=$((TOTAL_FAILED + 1))
+    
+    # Onda 3: Degradação
+    run_scenario_wave "cenario-degradacao-gradual.js" "degradacao" || TOTAL_FAILED=$((TOTAL_FAILED + 1))
+    
+    # Onda 4: Rajadas
+    run_scenario_wave "cenario-rajadas-intermitentes.js" "rajadas" || TOTAL_FAILED=$((TOTAL_FAILED + 1))
+    
+    # Onda 5: Indisponibilidade
+    run_scenario_wave "cenario-indisponibilidade-extrema.js" "indisponibilidade" || TOTAL_FAILED=$((TOTAL_FAILED + 1))
+    
+    # Onda 6: Normal
+    run_scenario_wave "cenario-operacao-normal.js" "normal" || TOTAL_FAILED=$((TOTAL_FAILED + 1))
+  else
+    # Executa apenas o cenário passado (ex: Completo)
+    if [ "${TARGET_SCENARIOS}" = "Completo" ]; then
+        run_scenario_wave "cenario-completo.js" "Completo" || TOTAL_FAILED=$((TOTAL_FAILED + 1))
+    else
+        # Se for um cenário específico passado do run_everything
+        # Ex: "catastrofe" mapping to cenario-falha-catastrofica.js
+        case "${TARGET_SCENARIOS}" in
+            catastrofe) run_scenario_wave "cenario-falha-catastrofica.js" "catastrofe" ;;
+            degradacao) run_scenario_wave "cenario-degradacao-gradual.js" "degradacao" ;;
+            rajadas) run_scenario_wave "cenario-rajadas-intermitentes.js" "rajadas" ;;
+            indisponibilidade) run_scenario_wave "cenario-indisponibilidade-extrema.js" "indisponibilidade" ;;
+            normal) run_scenario_wave "cenario-operacao-normal.js" "normal" ;;
+            *) echo "⚠️  Cenário desconhecido: ${TARGET_SCENARIOS}"; exit 1 ;;
+        esac || TOTAL_FAILED=$((TOTAL_FAILED + 1))
     fi
-  done
+  fi
   
   echo ""
   echo "╔══════════════════════════════════════════════════════════════════╗"
-  if [ ${FAILED} -eq 0 ]; then
-    echo "║  ✓ TODOS OS TESTES CONCLUÍDOS COM SUCESSO!                       ║"
+  if [ ${TOTAL_FAILED} -eq 0 ]; then
+    echo "║  ✓ TODOS OS CENÁRIOS CONCLUÍDOS COM SUCESSO!                     ║"
   else
-    echo "║  ✗ ${FAILED} TESTE(S) FALHARAM                                        ║"
+    echo "║  ✗ ${TOTAL_FAILED} CENÁRIO(S) TIVERAM FALHAS                              ║"
   fi
   echo "╚══════════════════════════════════════════════════════════════════╝"
   echo ""
-  echo "Resultados disponíveis em: ${K6_RESULTS_HOST_DIR}"
-  echo "Logs de execução em: ${LOG_DIR}"
+  echo "Logs: ${LOG_DIR}/"
   
   popd >/dev/null
 }

@@ -1,7 +1,7 @@
 \section{Methodology}
 \label{sec:methodology}
 
-This work adopts a \textbf{quantitative experimental research} approach. We built a simplified Proof of Concept (POC) simulating a microservices ecosystem with synchronous dependency. The POC is intentionally minimalistic—without database, cache, or authentication—to isolate the Circuit Breaker's effect as the sole variable of interest.
+This work adopts a \textbf{quantitative experimental research} approach. We constructed a simplified Proof of Concept (POC) simulating a microservices ecosystem with synchronous dependency. The POC is intentionally minimalistic---without database, cache, or authentication---to isolate the Circuit Breaker's effect as the sole variable of interest.
 
 \subsection{Experimental Architecture}
 
@@ -12,12 +12,12 @@ The POC comprises two Spring Boot microservices packaged as Docker containers:
     \item \textbf{acquirer-service}: Simulates an external payment gateway with configurable behavior (normal, latency, or failure mode).
 \end{itemize}
 
-Figure~\ref{fig:architecture} summarizes the simplified architecture used throughout the experiments.
+Figure~\ref{fig:architecture} presents the complete architecture of the experimental ecosystem, showing the interaction between the payment service, acquirer service, and the k6 load testing infrastructure.
 
-\begin{figure}[t]
+\begin{figure}[htbp]
 \centering
-\includegraphics[width=0.48\textwidth]{simplified_architecture_en.png}
-\caption{Simplified architecture of the experimental microservices ecosystem.}
+\includegraphics[width=0.95\textwidth]{images/arch_tcc_mermaid_en.png}
+\caption{Simplified architecture of the experimental microservices ecosystem. The diagram shows: (1) k6 load generator sending requests to payment-service; (2) payment-service making synchronous calls to acquirer-service via Feign Client; (3) acquirer-service simulating various failure modes (normal, latency, failure). All components are containerized using Docker Compose for reproducibility. The Circuit Breaker (V2/V4) intercepts calls between payment-service and acquirer-service.}
 \label{fig:architecture}
 \end{figure}
 
@@ -25,74 +25,90 @@ Four versions of payment-service were developed:
 \begin{itemize}
     \item \textbf{V1 (Baseline)}: Basic timeouts only (2s);
     \item \textbf{V2 (Circuit Breaker)}: Resilience4j with CB and fallback returning HTTP 202;
-    \item \textbf{V3 (Retry)}: Exponential backoff retry (3 attempts, 500ms→1s→2s);
-    \item \textbf{V4 (Composition)}: Combines V2 and V3, simulating a production-grade resilience stack.
+    \item \textbf{V3 (Retry)}: Exponential backoff retry (3 attempts, 500ms$\rightarrow$1s$\rightarrow$2s);
+    \item \textbf{V4 (Composition)}: Combines V3 wrapping the Feign client call, which is itself protected by the Circuit Breaker from V2, simulating a production-grade resilience stack that absorbs transient jitters before tripping the circuit.
 \end{itemize}
 
 \subsection{Circuit Breaker Configuration (V2)}
 
-The Resilience4j Circuit Breaker was configured to provide a balance between fail-fast responsiveness and stability. Thresholds were selected based on the \textbf{criticality of the payment domain}.
+The Resilience4j Circuit Breaker was configured to balance fail-fast responsiveness with stability. Thresholds were selected based on the \textbf{criticality of the payment domain}:
 
 \begin{itemize}
-    \item \textbf{failureRateThreshold}: 50\% --- Represents a conservative threshold where the system assumes the dependency is no longer reliable. Lower values (e.g., 20\%) might cause \textit{flapping} due to transient jitters;
-    \item \textbf{slowCallRateThreshold}: 70\% --- Prioritizes thread protection against slow dependencies, which are often more dangerous than total failures as they cause silent resource exhaustion;
-    \item \textbf{slidingWindowSize}: 20 requests --- Increased from 10 to provide a more robust statistical sample, reducing the impact of outliers;
-    \item \textbf{waitDurationInOpenState}: 15s --- Aligned with standard recovery times for cloud-native load balancers to detect healthy instances;
-    \item \textbf{permittedNumberOfCallsInHalfOpenState}: 5 --- Allows a small "probe" traffic to verify recovery without risking a full system impact.
+    \item \textbf{failureRateThreshold}: 50\%---A conservative threshold indicating the dependency is no longer reliable. Lower values (e.g., 20\%) might cause \textit{flapping} due to transient jitters;
+    \item \textbf{slowCallRateThreshold}: 70\%---Prioritizes thread protection against slow dependencies, which are often more dangerous than total failures as they cause silent resource exhaustion;
+    \item \textbf{slidingWindowSize}: 20 requests---Increased from 10 to provide a more robust statistical sample, reducing the impact of outliers;
+    \item \textbf{waitDurationInOpenState}: 15s---Aligned with standard recovery times for cloud-native load balancers when detecting healthy instances;
+    \item \textbf{permittedNumberOfCallsInHalfOpenState}: 5---Allows a small ``probe'' traffic to verify recovery without risking full system impact.
 \end{itemize}
 
 \subsection{Fallback Definition and RFC 9110}
 
-The use of \textbf{HTTP 202 (Accepted)} as a fallback response is a deliberate architectural choice. According to \textbf{RFC 9110}, HTTP 202 indicates that the request has been accepted for processing, but the processing has not been completed. This aligns with a "scheduled payment" or "queue for later" pattern, maintaining semantic honesty while providing a graceful degradation path for the end user \cite{rfc9110}.
+The use of \textbf{HTTP 202 (Accepted)} as a fallback response is a deliberate architectural choice. According to \textbf{RFC 9110}, HTTP 202 indicates that the request has been accepted for processing, but processing has not been completed. This aligns with a ``scheduled payment'' or ``queue for later'' pattern, maintaining semantic honesty while providing a graceful degradation path for end users \cite{rfc9110}.
 
 \subsection{State Transition Workflow}
 
-The Circuit Breaker transitions through three primary states: \textbf{Closed} (all traffic flows), \textbf{Open} (traffic blocked/fallback), and \textbf{Half-Open} (controlled probing). Figure~\ref{fig:cb-workflow} illustrates this logic.
+The Circuit Breaker transitions through three primary states: \textbf{Closed} (all traffic flows), \textbf{Open} (traffic blocked, fallback active), and \textbf{Half-Open} (controlled probing). Figure~\ref{fig:cb-workflow} illustrates the state machine logic governing these transitions.
 
 \begin{figure}[htbp]
 \centering
-\begin{minipage}{0.45\textwidth}
+\begin{minipage}{0.90\textwidth}
 \raggedright
 \small
-\textbf{1. Closed} $\rightarrow$ \textbf{Open}: Triggered when $failureRate > 50\%$ in a 10-req window. \\
-\textbf{2. Open} $\rightarrow$ \textbf{Half-Open}: Automatic after 10s wait duration. \\
-\textbf{3. Half-Open}: Probes with 3 requests. \\
-\textbf{4. Half-Open} $\rightarrow$ \textbf{Closed}: If all 3 probes succeed. \\
-\textbf{5. Half-Open} $\rightarrow$ \textbf{Open}: If any probe fails.
+\textbf{State Machine Transitions:}
+\begin{enumerate}
+    \item \textbf{Closed} $\rightarrow$ \textbf{Open}: Triggered when $failureRate > 50\%$ within a 20-request sliding window.
+    \item \textbf{Open} $\rightarrow$ \textbf{Half-Open}: Automatic transition after 15s wait duration.
+    \item \textbf{Half-Open}: Probes with 5 controlled requests.
+    \item \textbf{Half-Open} $\rightarrow$ \textbf{Closed}: If all 5 probes succeed.
+    \item \textbf{Half-Open} $\rightarrow$ \textbf{Open}: If any probe fails.
+\end{enumerate}
 \end{minipage}
-\caption{Circuit Breaker State Machine Workflow Logic.}
+\caption{Circuit Breaker State Machine Workflow Logic. The state transitions are governed by configured thresholds: a 50\% failure rate threshold triggers opening, a 15-second wait duration governs the Open$\rightarrow$Half-Open transition, and 5 probe requests determine recovery. This configuration represents a balance between fail-fast protection and recovery sensitivity.}
 \label{fig:cb-workflow}
 \end{figure}
 
 \subsection{Test Scenarios}
 
-Five realistic failure scenarios were designed using Grafana k6 (Table~\ref{tab:scenarios}):
+Five realistic failure scenarios were designed using Grafana k6 to simulate diverse failure patterns encountered in production environments (Table~\ref{tab:scenarios}).
 
 \begin{table}[H]
 \centering
-\caption{Test Scenario Characteristics}
+\caption{Test Scenario Characteristics. Each scenario simulates a different failure pattern with varying duration, virtual user (VU) load, and failure intensity.}
 \label{tab:scenarios}
 \begin{tabular}{lccc}
 \toprule
 \textbf{Scenario} & \textbf{Duration} & \textbf{VUs} & \textbf{Failure Pattern} \\
 \midrule
 Catastrophe & 13min & 50-150 & 100\% failure for 5min \\
-Degradation & 13min & 100-200 & 5\%→50\% gradual \\
-Bursts & 13min & 100-200 & 3×(100\% for 1min) \\
-Unavailability & 9min & 80-200 & 75\% offline \\
-Normal & 10min & 100 & 100\% healthy \\
+Degradation & 13min & 100-200 & 5\%→50\% gradual increase \\
+Bursts & 13min & 100-200 & 3×(100\% for 1min) intermittent \\
+Unavailability & 9min & 80-200 & 75\% offline throughout \\
+Normal & 10min & 100 & 100\% healthy baseline \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\vspace{-0.5em}
+
+Figure~\ref{fig:test-scenarios} provides a visual summary of the five test scenarios with their corresponding Perceived Availability results across versions.
+
+\vspace{-0.5em}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{images/test-cenarios-en.png}
+\caption{Test Scenarios and Perceived Availability Results (V1, V2, V4). Scenarios are ordered by severity from Normal to Extreme Unavailability, demonstrating the progressive advantage of Circuit Breaker protection.}
+\label{fig:test-scenarios}
+\end{figure}
+
 \subsection{Metrics and Statistical Analysis}
 
-Collected metrics include: http\_reqs (throughput), http\_req\_duration\{p(95)\} (latency percentile), and http\_req\_failed (error rate).
+Collected metrics include: \texttt{http\_reqs} (throughput), \texttt{http\_req\_duration\{p(95)\}} (latency percentile), and \texttt{http\_req\_failed} (error rate).
 
-To reflect user-visible continuity of service, we define \textbf{Perceived Availability} as the fraction of requests that result in either a successful outcome (HTTP 200/201) or a graceful degradation outcome delivered through the fallback mechanism (HTTP 202). Following HTTP semantics, HTTP 202 (Accepted) indicates that the request has been accepted for processing, which is suitable for our “scheduled payment” fallback \cite{rfc9110}.
+To reflect user-visible continuity of service, we define \textbf{Perceived Availability} as the fraction of requests resulting in either a successful outcome (HTTP 200/201) or a graceful degradation outcome delivered through the fallback mechanism (HTTP 202). Following HTTP semantics, HTTP 202 (Accepted) indicates that the request has been accepted for processing, which is appropriate for our ``scheduled payment'' fallback \cite{rfc9110}.
 
 \[
 A_p = \frac{n_{200} + n_{201} + n_{202}}{n_{\text{total}}}
 \]
 
-Statistical validation employed: Student's t-test for comparing V1 vs V2, ANOVA for three-group comparison (V1, V2, V3), and Cohen's d for effect size quantification.
+Statistical validation employed: Student's t-test for comparing V1 vs V2, ANOVA for three-group comparison (V1, V2, V3), and Cliff's Delta for effect size quantification per Romano et al. guidelines.

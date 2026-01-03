@@ -23,7 +23,9 @@ def export_comprehensive_results():
             v1_avail = df_stat[df_stat['Version'] == 'V1']['Total Success Rate (%)'].values[0]
             v2_avail = df_stat[df_stat['Version'] == 'V2']['Total Success Rate (%)'].values[0]
             v3_avail = df_stat[df_stat['Version'] == 'V3']['Total Success Rate (%)'].values[0]
+            v4_avail = df_stat[df_stat['Version'] == 'V4']['Total Success Rate (%)'].values[0]
             v2_fallback = df_stat[df_stat['Version'] == 'V2']['Fallback Rate (%)'].values[0]
+            v4_fallback = df_stat[df_stat['Version'] == 'V4']['Fallback Rate (%)'].values[0]
             fail_red = df_ben['Failure Reduction (%)'].values[0]
             
             row = [
@@ -32,7 +34,8 @@ def export_comprehensive_results():
                 f"{v2_avail:.1f}\\%",
                 f"{v2_fallback:.1f}\\%",
                 f"{v3_avail:.1f}\\%",
-                f"{fail_red:.1f}\\%"
+                f"{v4_avail:.1f}\\%",
+                f"{v4_fallback:.1f}\\%"
             ]
             rows.append(row)
 
@@ -42,9 +45,9 @@ def export_comprehensive_results():
         "\\centering",
         "\\caption{Comprehensive Performance Comparison: Perceived Availability across Failure Scenarios}",
         "\\label{tab:comprehensive-results}",
-        "\\begin{tabular}{lccccc}",
+        "\\begin{tabular}{lcccccc}",
         "\\toprule",
-        "Scenario & V1 Avail. & V2 Avail. & V2 Fallback & V3 Avail. & Fail. Red. (V2) \\\\",
+        "Scenario & V1 Avail. & V2 Avail. & V2 Fallb. & V3 Avail. & V4 Avail. & V4 Fallb. \\\\",
         "\\midrule"
     ]
     
